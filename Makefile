@@ -14,7 +14,10 @@ lint:
 lint/fix:
 	@uv run ruff format
 
-
 .PHONY: ty
 ty:
 	@uv run ty check
+
+.PHONY: req/generate
+req/generate:
+	@uv pip compile pyproject.toml -o requirements.txt
