@@ -64,6 +64,8 @@ idna==3.18
     # via
     #   anyio
     #   httpx
+iniconfig==2.3.0
+    # via pytest
 jinja2==3.1.6
     # via gradio
 markdown-it-py==4.2.0
@@ -85,10 +87,13 @@ packaging==26.2
     #   gradio
     #   gradio-client
     #   huggingface-hub
+    #   pytest
 pandas==3.0.3
     # via gradio
 pillow==12.2.0
     # via gradio
+pluggy==1.6.0
+    # via pytest
 pydantic==2.13.4
     # via
     #   fastapi
@@ -98,7 +103,11 @@ pydantic-core==2.46.4
 pydub==0.25.1
     # via gradio
 pygments==2.20.0
-    # via rich
+    # via
+    #   pytest
+    #   rich
+pytest==9.0.3
+    # via alien (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via pandas
 python-multipart==0.0.32
@@ -111,6 +120,8 @@ pyyaml==6.0.3
     #   huggingface-hub
 rich==15.0.0
     # via typer
+ruff==0.15.16
+    # via alien (pyproject.toml)
 safehttpx==0.1.7
     # via gradio
 semantic-version==2.10.0
@@ -127,6 +138,8 @@ tomlkit==0.14.0
     # via gradio
 tqdm==4.68.1
     # via huggingface-hub
+ty==0.0.44
+    # via alien (pyproject.toml)
 typer==0.25.1
     # via
     #   gradio
