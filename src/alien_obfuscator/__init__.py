@@ -1,0 +1,22 @@
+"""Alien Obfuscator — Encode messages as riddles drawn from ancient texts."""
+
+from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, NUM_OPTIONS
+from alien_obfuscator.corpus_manager import CorpusManager
+from alien_obfuscator.riddle_generator import (
+    HuggingFaceBackend,
+    LLMBackend,
+    MockBackend,
+    RiddleGenerator,
+    _validate_riddle_json,
+)
+
+__all__ = [
+    "CorpusManager",
+    "HuggingFaceBackend",
+    "LLMBackend",
+    "MockBackend",
+    "RiddleGenerator",
+    "MAX_PLAINTEXT_LENGTH",
+    "NUM_OPTIONS",
+    "_validate_riddle_json",
+]

@@ -1,0 +1,374 @@
+"""Riddle generator and LLM backend abstraction.
+
+This module hides the details of *how* a riddle is produced (local model,
+HF Inference API, or a hard-coded mock) behind a single ``generate``
+function.  It also handles prompt construction, JSON schema validation,
+and retry logic.
+"""
+
+import json
+import random
+from abc import ABC, abstractmethod
+from typing import Any
+
+from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, MAX_RETRIES, NUM_OPTIONS
+from alien_obfuscator.corpus_manager import CorpusManager
+
+
+# ---------------------------------------------------------------------------
+# JSON schema that a riddle response must satisfy
+# ---------------------------------------------------------------------------
+RIDDLE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "riddle": {"type": "string"},
+        "options": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": NUM_OPTIONS,
+            "maxItems": NUM_OPTIONS,
+        },
+        "correct_index": {"type": "integer", "minimum": 0, "maximum": NUM_OPTIONS - 1},
+        "theme": {"type": "string"},
+    },
+    "required": ["riddle", "options", "correct_index", "theme"],
+}
+
+
+# ---------------------------------------------------------------------------
+# Prompt templates
+# ---------------------------------------------------------------------------
+SYSTEM_PROMPT_TEMPLATE: str = (
+    "You are a mischievous alien archaeologist who has spent centuries studying "
+    "ancient human texts. You craft riddles in the voice of {theme_description}.\n\n"
+    "Generate a riddle whose ANSWER is: {plaintext}\n\n"
+    "Rules:\n"
+    "- The riddle must be solvable by a human familiar with {theme_name}, "
+    "but confusing to anyone without cultural context.\n"
+    "- The riddle should be 2–4 sentences, poetic, and contain at least one clever twist.\n"
+    "- Generate exactly {num_options} answer options: 1 correct (the PLAINTEXT itself), "
+    "{num_distractors} plausible distractors.\n"
+    "- Distractors should be thematically adjacent (same domain, same era, similar concepts).\n"
+    "- Output ONLY valid JSON.\n"
+)
+
+STRICT_JSON_PROMPT: str = (
+    "\n\nIMPORTANT: Return ONLY a raw JSON object. No markdown, no code fences, "
+    "no explanations. The JSON must match this exact schema:\n"
+    '{"riddle": "string", "options": ["string", "string", "string", "string", "string"], '
+    '"correct_index": 0, "theme": "string"}'
+)
+
+
+def _validate_riddle_json(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate a parsed JSON dict against the riddle schema.
+
+    Parameters
+    ----------
+    data : dict[str, Any]
+        The parsed JSON object from the LLM.
+
+    Returns
+    -------
+    dict[str, Any]
+        The validated data dict (unchanged).
+
+    Raises
+    ------
+    ValueError
+        If any required field is missing or has the wrong type / length.
+    """
+    required = RIDDLE_SCHEMA["required"]
+    for key in required:
+        if key not in data:
+            raise ValueError(f"Missing required field: {key}")
+
+    if not isinstance(data["riddle"], str) or not data["riddle"].strip():
+        raise ValueError("Field 'riddle' must be a non-empty string.")
+
+    opts = data["options"]
+    if not isinstance(opts, list) or len(opts) != NUM_OPTIONS:
+        raise ValueError(f"Field 'options' must be a list of exactly {NUM_OPTIONS} strings.")
+    for o in opts:
+        if not isinstance(o, str):
+            raise ValueError("Every item in 'options' must be a string.")
+
+    ci = data["correct_index"]
+    if not isinstance(ci, int) or ci < 0 or ci >= NUM_OPTIONS:
+        raise ValueError(f"Field 'correct_index' must be an integer between 0 and {NUM_OPTIONS - 1}.")
+
+    if not isinstance(data.get("theme", ""), str):
+        raise ValueError("Field 'theme' must be a string.")
+
+    return data
+
+
+# ---------------------------------------------------------------------------
+# LLM backends
+# ---------------------------------------------------------------------------
+class LLMBackend(ABC):
+    """Abstract interface for an LLM inference backend."""
+
+    @abstractmethod
+    def generate(self, prompt: str) -> str:
+        """Send ``prompt`` to the model and return the raw text response.
+
+        Parameters
+        ----------
+        prompt : str
+            The fully formatted prompt.
+
+        Returns
+        -------
+        str
+            Raw model output.
+        """
+        ...
+
+
+class MockBackend(LLMBackend):
+    """Hard-coded backend that returns predictable JSON for testing.
+
+    Useful for offline development, CI, and rapid UI iteration without
+    waiting for real model inference.
+    """
+
+    def generate(self, prompt: str) -> str:
+        """Return a canned riddle JSON based on the plaintext in the prompt.
+
+        Parameters
+        ----------
+        prompt : str
+            Ignored except for extracting the plaintext answer.
+
+        Returns
+        -------
+        str
+            A JSON string matching the riddle schema.
+        """
+        # Try to extract the plaintext from the prompt line "ANSWER is: X"
+        plaintext = "the secret message"
+        for line in prompt.splitlines():
+            if "ANSWER is:" in line:
+                plaintext = line.split("ANSWER is:", 1)[-1].strip()
+                break
+
+        distractors = [
+            "a wrong answer",
+            "another wrong answer",
+            "yet another wrong answer",
+            "the last wrong answer",
+        ]
+        return json.dumps(
+            {
+                "riddle": (
+                    "I am the thing that humans whisper when the stars are right, "
+                    "the phrase that unlocks the hidden door. What am I?"
+                ),
+                "options": [plaintext] + distractors,
+                "correct_index": 0,
+                "theme": "mock",
+            },
+            indent=2,
+        )
+
+
+class HuggingFaceBackend(LLMBackend):
+    """Backend that calls the Hugging Face Inference API (serverless).
+
+    Parameters
+    ----------
+    model_id : str
+        Hugging Face model identifier (e.g. ``"google/gemma-4-31b-it"``).
+    api_token : str | None
+        Hugging Face API token. If ``None``, the token is read from the
+        ``HF_TOKEN`` environment variable.
+    """
+
+    def __init__(self, model_id: str, api_token: str | None = None) -> None:
+        self.model_id = model_id
+        self.api_token = api_token
+
+    def generate(self, prompt: str) -> str:
+        """Call the Hugging Face Inference API and return the generated text.
+
+        Parameters
+        ----------
+        prompt : str
+            The prompt to send.
+
+        Returns
+        -------
+        str
+            Raw model output.
+
+        Raises
+        ------
+        RuntimeError
+            If the API request fails or returns an error.
+        """
+        import os
+
+        import requests
+
+        token = self.api_token or os.environ.get("HF_TOKEN")
+        if not token:
+            raise RuntimeError("HF_TOKEN not provided and not found in environment.")
+
+        url = f"https://api-inference.huggingface.co/models/{self.model_id}"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        payload = {
+            "inputs": prompt,
+            "parameters": {"max_new_tokens": 256, "temperature": 0.8, "return_full_text": False},
+        }
+
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(f"HF API error {response.status_code}: {response.text}")
+
+        data = response.json()
+        if isinstance(data, list) and len(data) > 0:
+            return data[0].get("generated_text", "")
+        return str(data)
+
+
+# ---------------------------------------------------------------------------
+# Riddle generator
+# ---------------------------------------------------------------------------
+class RiddleGenerator:
+    """Orchestrate prompt building, LLM inference, and response validation.
+
+    Parameters
+    ----------
+    backend : LLMBackend
+        The concrete LLM implementation to use.
+    corpus_manager : CorpusManager
+        Source of random corpus excerpts for prompt enrichment.
+    max_retries : int, default 2
+        How many times to retry on JSON parse / validation errors.
+    """
+
+    def __init__(
+        self,
+        backend: LLMBackend,
+        corpus_manager: CorpusManager,
+        max_retries: int = MAX_RETRIES,
+    ) -> None:
+        self._backend = backend
+        self._corpus = corpus_manager
+        self._max_retries = max_retries
+
+    def _build_prompt(self, plaintext: str, theme: str, excerpt: str) -> str:
+        """Construct the full prompt for the LLM.
+
+        Parameters
+        ----------
+        plaintext : str
+            The secret message to encode.
+        theme : str
+            Theme key (e.g. ``"greek_myth"``).
+        excerpt : str
+            A corpus excerpt to inject as creative inspiration.
+
+        Returns
+        -------
+        str
+            The formatted prompt.
+        """
+        from alien_obfuscator.config import THEME_LABELS
+
+        theme_label = THEME_LABELS.get(theme, theme)
+        prompt = SYSTEM_PROMPT_TEMPLATE.format(
+            theme_description=theme_label,
+            theme_name=theme_label,
+            plaintext=plaintext,
+            num_options=NUM_OPTIONS,
+            num_distractors=NUM_OPTIONS - 1,
+        )
+        prompt += f"\n\nSource text inspiration:\n{excerpt}\n"
+        prompt += STRICT_JSON_PROMPT
+        return prompt
+
+    def _parse_response(self, raw: str) -> dict[str, Any]:
+        """Clean and parse the raw LLM output into a validated dict.
+
+        Strips markdown fences (```json ... ```) if present.
+
+        Parameters
+        ----------
+        raw : str
+            Raw text from the LLM.
+
+        Returns
+        -------
+        dict[str, Any]
+            Validated riddle dict.
+
+        Raises
+        ------
+        ValueError
+            If the text cannot be parsed or validated.
+        """
+        text = raw.strip()
+        if text.startswith("```"):
+            # Strip markdown code fences
+            text = text.removeprefix("```json").removeprefix("```")
+            text = text.removesuffix("```").strip()
+        data = json.loads(text)
+        return _validate_riddle_json(data)
+
+    def generate(self, plaintext: str, theme: str) -> dict[str, Any]:
+        """Generate a riddle + MCQ options for the given plaintext and theme.
+
+        Retries up to ``max_retries`` times if the LLM returns malformed
+        JSON. On success, the ``options`` list is shuffled and
+        ``correct_index`` is updated accordingly.
+
+        Parameters
+        ----------
+        plaintext : str
+            The secret message to encode.
+        theme : str
+            Theme key or ``"surprise"``.
+
+        Returns
+        -------
+        dict[str, Any]
+            A validated riddle dict with shuffled options.
+
+        Raises
+        ------
+        ValueError
+            If the plaintext is empty or exceeds the length limit.
+        RuntimeError
+            If all retries are exhausted without producing valid JSON.
+        """
+        if not plaintext or not plaintext.strip():
+            raise ValueError("Plaintext must not be empty.")
+        if len(plaintext) > MAX_PLAINTEXT_LENGTH:
+            raise ValueError(f"Plaintext exceeds {MAX_PLAINTEXT_LENGTH} characters.")
+
+        excerpt = self._corpus.get_excerpt(theme, count=1)[0]
+        last_error: Exception | None = None
+
+        for _attempt in range(self._max_retries + 1):
+            try:
+                prompt = self._build_prompt(plaintext, theme, excerpt)
+                raw = self._backend.generate(prompt)
+                data = self._parse_response(raw)
+                break
+            except (json.JSONDecodeError, ValueError, RuntimeError) as exc:
+                last_error = exc
+                continue
+        else:
+            raise RuntimeError(
+                f"Failed to generate valid riddle after {self._max_retries + 1} attempts."
+            ) from last_error
+
+        # Shuffle options so the correct answer moves to a random position
+        options = data["options"]
+        correct_answer = options[data["correct_index"]]
+        random.shuffle(options)
+        data["correct_index"] = options.index(correct_answer)
+        data["theme"] = theme
+        return data

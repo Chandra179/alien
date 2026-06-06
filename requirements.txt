@@ -10,6 +10,7 @@ anyio==4.13.0
     # via
     #   gradio
     #   httpx
+    #   pytest-anyio
     #   starlette
 audioop-lts==0.2.2
     # via gradio
@@ -19,6 +20,9 @@ certifi==2026.5.20
     # via
     #   httpcore
     #   httpx
+    #   requests
+charset-normalizer==3.4.7
+    # via requests
 click==8.4.1
     # via
     #   huggingface-hub
@@ -64,6 +68,7 @@ idna==3.18
     # via
     #   anyio
     #   httpx
+    #   requests
 iniconfig==2.3.0
     # via pytest
 jinja2==3.1.6
@@ -107,6 +112,13 @@ pygments==2.20.0
     #   pytest
     #   rich
 pytest==9.0.3
+    # via
+    #   alien (pyproject.toml)
+    #   pytest-anyio
+    #   pytest-mock
+pytest-anyio==0.0.0
+    # via alien (pyproject.toml)
+pytest-mock==3.15.1
     # via alien (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via pandas
@@ -118,6 +130,8 @@ pyyaml==6.0.3
     # via
     #   gradio
     #   huggingface-hub
+requests==2.34.2
+    # via alien (pyproject.toml)
 rich==15.0.0
     # via typer
 ruff==0.15.16
@@ -158,5 +172,7 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
+urllib3==2.7.0
+    # via requests
 uvicorn==0.49.0
     # via gradio

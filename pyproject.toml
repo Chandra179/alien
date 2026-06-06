@@ -7,6 +7,9 @@ requires-python = "==3.13.5"
 dependencies = [
     "gradio>=6.16.0",
     "pytest>=9.0.3",
+    "pytest-mock>=3.14.0",
+    "pytest-anyio>=0.0.0",
+    "requests>=2.32.0",
     "ruff>=0.15.16",
     "ty>=0.0.44",
 ]
@@ -58,4 +61,4 @@ docstring-code-format = false
 docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.isort]
-known-first-party = ["python-pixi-template"]
+known-first-party = ["alien_obfuscator"]
