@@ -6,6 +6,14 @@ start:
 test:
 	@uv run pytest tests/ -v
 
+.PHONY: test/coverage
+test/coverage:
+	@uv run pytest --cov=alien_obfuscator --cov-report=term-missing tests/ -v
+
+.PHONY: test/report
+test/report:
+	@uv run pytest --cov=alien_obfuscator --cov-report=html tests/ -v
+
 .PHONY: lint
 lint:
 	@uv run ruff check
