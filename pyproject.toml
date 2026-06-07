@@ -13,6 +13,7 @@ dependencies = [
     "requests>=2.32.0",
     "ruff>=0.15.16",
     "ty>=0.0.44",
+    "pytest-cov>=7.1.0",
 ]
 
 [build-system]
