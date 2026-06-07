@@ -66,7 +66,7 @@ alien-obfuscator/
 uv sync
 
 # Run the app
-uv run app.py
+make start
 
 # Run tests
 make test

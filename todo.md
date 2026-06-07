@@ -35,6 +35,7 @@
 - [x] Build scoring system (+10 base, +5 speed bonus, +3 streak bonus)
 - [x] Add high score persistence (localStorage)
 - [x] Test with mocked riddle generator
+- [ ] Fix game timer not counting down when the browser's tab is not active.
 
 ## Phase 4: Polish & Integration
 - [x] Add custom CSS (dark sci-fi theme, alien monitor)
