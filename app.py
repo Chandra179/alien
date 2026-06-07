@@ -307,12 +307,12 @@ def build_ui() -> gr.Blocks:
                                     label="Generated Riddle",
                                     lines=10,
                                     interactive=False,
+                                    buttons=["copy"],
                                 )
                                 correct_hint = gr.Textbox(
                                     label="Correct Answer (sender only)",
                                     interactive=False,
                                 )
-                                copy_btn = gr.Button("Copy to Clipboard")
                                 encrypt_error = gr.Textbox(
                                     label="Status",
                                     interactive=False,
@@ -340,18 +340,6 @@ def build_ui() -> gr.Blocks:
                                 encrypt_error,
                                 riddle_state,
                             ],
-                        )
-
-                        copy_btn.click(
-                            lambda card: card,
-                            inputs=riddle_card,
-                            outputs=None,
-                            js="""
-                            (text) => {
-                                navigator.clipboard.writeText(text);
-                                return [];
-                            }
-                            """,
                         )
 
                     # ---------------- Solve ----------------
