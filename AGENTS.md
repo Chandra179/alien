@@ -6,6 +6,7 @@
 - Package Manager: [uv](https://docs.astral.sh/uv/)
 
 ## Tooling & Environment
+
 - This project uses `uv` for dependency and environment management.
 - CRITICAL: Always use `uv run` to execute scripts, tests, or tools. Never use global `pytest` or `python`.
 
