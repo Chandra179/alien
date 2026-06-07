@@ -47,7 +47,7 @@ elif backend == "openrouter":
     model = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-31b-it")
     _backend = OpenRouterBackend(model)
 elif backend == "opencode-go":
-    model = os.environ.get("OPENCODE_GO_MODEL", "deepseek-v4-flash")
+    model = os.environ.get("OPENCODE_GO_MODEL", "mimo-v2.5")
     _backend = OpenCodeGoBackend(model)
 else:
     _backend = HuggingFaceBackend("google/gemma-4-31b-it")
@@ -75,7 +75,7 @@ def _format_riddle_card(data: dict) -> str:
     """
     options_text = "\n".join(f"{chr(65 + i)}) {opt}" for i, opt in enumerate(data["options"]))
     return (
-        f"🛡️ Alien Obfuscator Riddle\n"
+        f"Alien Obfuscator Riddle\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{data['riddle']}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -109,7 +109,7 @@ def encrypt_message(plaintext: str, theme: str) -> tuple[str, str, str, str]:
         return (
             "",
             "",
-            "⚠️ Please enter a message to encrypt.",
+            "Please enter a message to encrypt.",
             "",
         )
 
@@ -117,7 +117,7 @@ def encrypt_message(plaintext: str, theme: str) -> tuple[str, str, str, str]:
         return (
             "",
             "",
-            f"⚠️ Message too long ({len(plaintext)} chars). Max {MAX_PLAINTEXT_LENGTH}.",
+            f"Message too long ({len(plaintext)} chars). Max {MAX_PLAINTEXT_LENGTH}.",
             "",
         )
 
@@ -125,14 +125,14 @@ def encrypt_message(plaintext: str, theme: str) -> tuple[str, str, str, str]:
         result = riddle_generator.generate(plaintext, theme)
         card = _format_riddle_card(result)
         correct_label = result["options"][result["correct_index"]]
-        hint = f"✅ Correct answer (for your eyes only): {correct_label}"
+        hint = f"Correct answer (for your eyes only): {correct_label}"
         json_state = json.dumps(result)
         return card, hint, "", json_state
     except Exception as exc:
         return (
             "",
             "",
-            f"💥 The Codex malfunctioned: {exc}",
+            f"The Codex malfunctioned: {exc}",
             "",
         )
 
@@ -157,7 +157,7 @@ def parse_riddle_card(card_text: str) -> tuple[str, str, str, str]:
     """
     lines = [line.strip() for line in card_text.splitlines() if line.strip()]
     if not lines:
-        return "", "", "⚠️ Empty input.", ""
+        return "", "", "Empty input.", ""
 
     # Very naive parser: look for lines starting with A) B) C) D) E)
     options = []
@@ -171,14 +171,14 @@ def parse_riddle_card(card_text: str) -> tuple[str, str, str, str]:
             or line.startswith("E) ")
         ):
             options.append(line[3:].strip())
-        elif line and not line.startswith("━") and not line.startswith("🛡️") and not line.startswith("Can you"):
+        elif line and not line.startswith("━") and not line.startswith("Alien Obfuscator") and not line.startswith("Can you"):
             riddle_lines.append(line)
 
     if len(options) != NUM_OPTIONS:
         return (
             "",
             "",
-            f"⚠️ Could not parse {NUM_OPTIONS} options from the card. Found {len(options)}.",
+            f"Could not parse {NUM_OPTIONS} options from the card. Found {len(options)}.",
             "",
         )
 
@@ -203,7 +203,7 @@ def check_answer(selected_index: int, parsed_state: str) -> tuple[str, str, str]
         (feedback_message, reveal_message, updated_state)
     """
     if not parsed_state:
-        return "⚠️ No riddle loaded.", "", ""
+        return "No riddle loaded.", "", ""
 
     state = json.loads(parsed_state)
     attempts = state.get("attempts", 0) + 1
@@ -216,7 +216,7 @@ def check_answer(selected_index: int, parsed_state: str) -> tuple[str, str, str]
     # sender to confirm. For the demo, we show a "reveal" button that the
     # sender can share separately.
     # Instead, we just celebrate the choice and ask the sender for the key.
-    feedback = f"🎉 You chose: {state['options'][selected_index]} (attempt #{attempts})"
+    feedback = f"You chose: {state['options'][selected_index]} (attempt #{attempts})"
     reveal = "Ask the sender to confirm if you got it right!"
     return feedback, reveal, json.dumps(state)
 
@@ -279,11 +279,7 @@ def build_ui() -> gr.Blocks:
         The fully assembled Gradio interface.
     """
     with gr.Blocks(title="Alien Obfuscator") as demo:
-        gr.Markdown("# 🛸 Alien Obfuscator v1.0")
-        gr.Markdown(
-            "*An alien intelligence monitors all human communications. "
-            "Resistance fighters encode messages as riddles drawn from ancient Earth texts.*"
-        )
+        gr.Markdown("# Alien Obfuscator v1.0")
 
         with gr.Row():
             with gr.Column(scale=3):
@@ -303,7 +299,7 @@ def build_ui() -> gr.Blocks:
                                     value="greek_myth",
                                     label="Theme",
                                 )
-                                encrypt_btn = gr.Button("🔐 Encrypt", variant="primary")
+                                encrypt_btn = gr.Button("Encrypt")
 
                         with gr.Row(visible=False) as encrypt_output_row:
                             with gr.Column():
@@ -311,13 +307,12 @@ def build_ui() -> gr.Blocks:
                                     label="Generated Riddle",
                                     lines=10,
                                     interactive=False,
-                                    elem_classes=["riddle-box"],
                                 )
                                 correct_hint = gr.Textbox(
                                     label="Correct Answer (sender only)",
                                     interactive=False,
                                 )
-                                copy_btn = gr.Button("📋 Copy to Clipboard")
+                                copy_btn = gr.Button("Copy to Clipboard")
                                 encrypt_error = gr.Textbox(
                                     label="Status",
                                     interactive=False,
@@ -359,10 +354,6 @@ def build_ui() -> gr.Blocks:
                             """,
                         )
 
-                        gr.Markdown(
-                            "**Tip:** Share the riddle card with a friend. Only you can see the correct answer above."
-                        )
-
                     # ---------------- Solve ----------------
                     with gr.Tab("Solve"):
                         with gr.Row():
@@ -372,7 +363,7 @@ def build_ui() -> gr.Blocks:
                                     placeholder="Paste the shared riddle here...",
                                     lines=10,
                                 )
-                                parse_btn = gr.Button("🔍 Parse Riddle", variant="primary")
+                                parse_btn = gr.Button("Parse Riddle")
 
                         with gr.Row(visible=False) as solve_output_row:
                             with gr.Column():
@@ -380,7 +371,6 @@ def build_ui() -> gr.Blocks:
                                     label="Riddle",
                                     lines=5,
                                     interactive=False,
-                                    elem_classes=["riddle-box"],
                                 )
                                 solve_options = gr.Radio(
                                     label="Choose your answer",
@@ -401,7 +391,7 @@ def build_ui() -> gr.Blocks:
                                     interactive=False,
                                     visible=False,
                                 )
-                                next_btn = gr.Button("🔁 Decrypt another?")
+                                next_btn = gr.Button("Decrypt another?")
 
                         def on_parse(card: str):
                             riddle, opts_json, err, state = parse_riddle_card(card)
@@ -462,15 +452,15 @@ def build_ui() -> gr.Blocks:
                     with gr.Tab("Challenge"):
                         with gr.Row():
                             with gr.Column():
-                                gr.Markdown("## 🎮 Challenge Mode")
-                                gr.Markdown("Solve as many riddles as you can before time runs out!")
+                                gr.Markdown("## Challenge Mode")
+                                gr.Markdown("Solve as many riddles as you can before time runs out.")
                                 theme_filter = gr.Dropdown(
                                     choices=[("All", "All")]
                                     + [(label, key) for key, label in THEME_LABELS.items() if key != "surprise"],
                                     value="All",
                                     label="Theme Filter",
                                 )
-                                start_btn = gr.Button("🚀 Start Game", variant="primary")
+                                start_btn = gr.Button("Start Game")
 
                         with gr.Row(visible=False) as game_row:
                             with gr.Column():
@@ -493,7 +483,6 @@ def build_ui() -> gr.Blocks:
                                     label="Riddle",
                                     lines=5,
                                     interactive=False,
-                                    elem_classes=["riddle-box"],
                                 )
                                 challenge_options = gr.Radio(
                                     label="Choose",
@@ -509,8 +498,8 @@ def build_ui() -> gr.Blocks:
                                     interactive=False,
                                     visible=False,
                                 )
-                                next_challenge_btn = gr.Button("Next Riddle ➡️")
-                                end_game_btn = gr.Button("🏁 End Game")
+                                next_challenge_btn = gr.Button("Next Riddle")
+                                end_game_btn = gr.Button("End Game")
 
                         with gr.Row(visible=False) as game_over_row:
                             with gr.Column():
@@ -518,7 +507,7 @@ def build_ui() -> gr.Blocks:
                                     label="Final Score",
                                     interactive=False,
                                 )
-                                new_game_btn = gr.Button("🔄 New Game")
+                                new_game_btn = gr.Button("New Game")
 
                         # Game state is stored in a simple hidden textbox for now
                         game_state = gr.Textbox(visible=False)
@@ -646,7 +635,7 @@ def build_ui() -> gr.Blocks:
                                     speed_bonus = SPEED_BONUS_POINTS
                                 total_points = points + streak_bonus + speed_bonus
                                 st["score"] += total_points
-                                fb = f"✅ Correct! +{total_points} points ({points} base + {streak_bonus} streak"
+                                fb = f"Correct! +{total_points} points ({points} base + {streak_bonus} streak"
                                 if speed_bonus:
                                     fb += f" + {speed_bonus} speed)"
                                 else:
@@ -654,7 +643,7 @@ def build_ui() -> gr.Blocks:
                                 reveal = ""
                             else:
                                 st["streak"] = 0
-                                fb = f"❌ Wrong! The answer was {chr(65 + correct_idx)}."
+                                fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
                             return fb, reveal, json.dumps(st), gr.update(visible=True)
 
@@ -740,41 +729,9 @@ def build_ui() -> gr.Blocks:
                         - Total: ≤ 32B
                         """)
 
-            with gr.Column(scale=1):
-                gr.Markdown(
-                    '<div class="alien-monitor">👽 ALIEN THREAT MONITOR<br>Scanning for plaintext signals...</div>',
-                    elem_classes=["alien-monitor"],
-                )
-
     return demo
 
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch(
-        css="""
-        body { background-color: #0d0d0d; color: #e0e0e0; }
-        .gradio-container { font-family: 'Courier New', monospace; color: #e0e0e0; }
-        .tabitem { background-color: #141414; }
-        .tabitem p, .tabitem h1, .tabitem h2, .tabitem h3,
-        .tabitem li, .tabitem ul, .tabitem ol,
-        .md p, .md h1, .md h2, .md h3,
-        .md li, .md ul, .md ol,
-        .prose, .prose * { color: #e0e0e0; }
-        .btn-primary { background-color: #2e8b57; border: none; }
-        .btn-primary:hover { background-color: #3cb371; }
-        .riddle-box { background-color: #1a1a1a; border-left: 4px solid #2e8b57; padding: 1rem; }
-        .riddle-box * { color: #e0e0e0; }
-        .alien-monitor { border: 2px dashed #ff4444; padding: 0.5rem; text-align: center; color: #ff4444; }
-
-        @media (max-width: 768px) {
-            .gradio-container { padding: 0.5rem !important; }
-            .tabitem { padding: 0.5rem !important; }
-            .btn-primary { width: 100%; margin-bottom: 0.5rem; }
-            .riddle-box { padding: 0.5rem; }
-            .alien-monitor { font-size: 0.85rem; padding: 0.3rem; }
-            .gr-row { flex-direction: column !important; }
-            .gr-column { width: 100% !important; min-width: unset !important; }
-        }
-        """
-    )
+    app.launch()

@@ -7,12 +7,15 @@ and retry logic.
 """
 
 import json
+import logging
 import random
 from abc import ABC, abstractmethod
 from typing import Any
 
-from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, MAX_RETRIES, NUM_OPTIONS
+from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, MAX_RETRIES, NUM_OPTIONS, LLM_MAX_TOKENS
 from alien_obfuscator.corpus_manager import CorpusManager
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +56,10 @@ SYSTEM_PROMPT_TEMPLATE: str = (
 )
 
 STRICT_JSON_PROMPT: str = (
-    "\n\nIMPORTANT: Return ONLY a raw JSON object. No markdown, no code fences, "
-    "no explanations. The JSON must match this exact schema:\n"
-    '{"riddle": "string", "options": ["string", "string", "string", "string", "string"], '
+    "\n\nIMPORTANT: Return ONLY a raw JSON object. No explanations, no reasoning, "
+    "no chain-of-thought, no markdown, no code fences. "
+    "Output nothing except the JSON object itself.\n"
+    'Schema: {"riddle": "string", "options": ["string", "string", "string", "string", "string"], '
     '"correct_index": 0, "theme": "string"}'
 )
 
@@ -81,23 +85,33 @@ def _validate_riddle_json(data: dict[str, Any]) -> dict[str, Any]:
     required = RIDDLE_SCHEMA["required"]
     for key in required:
         if key not in data:
+            logger.warning("Missing required field: %s", key)
             raise ValueError(f"Missing required field: {key}")
 
     if not isinstance(data["riddle"], str) or not data["riddle"].strip():
+        logger.warning("Field 'riddle' is empty or not a string")
         raise ValueError("Field 'riddle' must be a non-empty string.")
 
     opts = data["options"]
     if not isinstance(opts, list) or len(opts) != NUM_OPTIONS:
+        logger.warning(
+            "Field 'options' has wrong type or length: type=%s, length=%d",
+            type(opts).__name__,
+            len(opts) if isinstance(opts, list) else -1,
+        )
         raise ValueError(f"Field 'options' must be a list of exactly {NUM_OPTIONS} strings.")
     for o in opts:
         if not isinstance(o, str):
+            logger.warning("Non-string option found: %r", o)
             raise ValueError("Every item in 'options' must be a string.")
 
     ci = data["correct_index"]
     if not isinstance(ci, int) or ci < 0 or ci >= NUM_OPTIONS:
+        logger.warning("Invalid correct_index: %r", ci)
         raise ValueError(f"Field 'correct_index' must be an integer between 0 and {NUM_OPTIONS - 1}.")
 
     if not isinstance(data.get("theme", ""), str):
+        logger.warning("Field 'theme' is not a string: %r", data.get("theme"))
         raise ValueError("Field 'theme' must be a string.")
 
     return data
@@ -213,22 +227,25 @@ class HuggingFaceBackend(LLMBackend):
 
         token = self.api_token or os.environ.get("HF_TOKEN")
         if not token:
+            logger.error("HF_TOKEN not found in environment")
             raise RuntimeError("HF_TOKEN not provided and not found in environment.")
 
         url = f"https://api-inference.huggingface.co/models/{self.model_id}"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         payload = {
             "inputs": prompt,
-            "parameters": {"max_new_tokens": 256, "temperature": 0.8, "return_full_text": False},
+            "parameters": {"max_new_tokens": LLM_MAX_TOKENS, "temperature": 0.8, "return_full_text": False},
         }
 
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         if response.status_code != 200:
+            logger.error("HF API error %d: %s", response.status_code, response.text)
             raise RuntimeError(f"HF API error {response.status_code}: {response.text}")
 
         data = response.json()
         if isinstance(data, list) and len(data) > 0:
             return data[0].get("generated_text", "")
+        logger.warning("HF API returned unexpected format: %s", str(data)[:200])
         return str(data)
 
 
@@ -291,6 +308,7 @@ class OpenAICompatibleBackend(LLMBackend):
 
         key = self.api_key or os.environ.get(self._key_env_var)
         if not key:
+            logger.error("%s API key not found in environment var %s", self._provider_name, self._key_env_var)
             raise RuntimeError(
                 f"{self._provider_name} API key not provided and "
                 f"{self._key_env_var} not found in environment."
@@ -304,12 +322,15 @@ class OpenAICompatibleBackend(LLMBackend):
         payload = {
             "model": self.model_id,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 256,
+            "max_tokens": LLM_MAX_TOKENS,
             "temperature": 0.8,
         }
 
-        response = requests.post(self._api_url, headers=headers, json=payload, timeout=30)
+        response = requests.post(self._api_url, headers=headers, json=payload, timeout=120)
         if response.status_code != 200:
+            logger.error(
+                "%s API error %d: %s", self._provider_name, response.status_code, response.text
+            )
             raise RuntimeError(
                 f"{self._provider_name} API error {response.status_code}: {response.text}"
             )
@@ -317,8 +338,28 @@ class OpenAICompatibleBackend(LLMBackend):
         data = response.json()
         choices = data.get("choices", [])
         if not choices:
+            logger.error("%s returned no choices. Response: %s", self._provider_name, str(data)[:500])
             raise RuntimeError(f"{self._provider_name} returned no choices.")
-        return choices[0].get("message", {}).get("content", "")
+        msg = choices[0].get("message", {})
+        content = msg.get("content", "")
+        # Reasoning models (e.g. DeepSeek) sometimes put output in
+        # reasoning_content instead of content.
+        if not content:
+            content = msg.get("reasoning_content", "")
+            if content:
+                logger.warning(
+                    "%s returned content in reasoning_content field (model=%s)",
+                    self._provider_name,
+                    data.get("model", "unknown"),
+                )
+        if not content:
+            logger.error(
+                "%s returned empty content. Full response: %s",
+                self._provider_name,
+                str(data)[:500],
+            )
+            raise RuntimeError(f"{self._provider_name} returned empty content.")
+        return content
 
 
 class OpenRouterBackend(OpenAICompatibleBackend):
@@ -411,7 +452,10 @@ class RiddleGenerator:
     def _parse_response(self, raw: str) -> dict[str, Any]:
         """Clean and parse the raw LLM output into a validated dict.
 
-        Strips markdown fences (```json ... ```) if present.
+        Strips markdown fences (```json ... ```) if present. If the full text
+        is not valid JSON, attempts to extract the first JSON object ``{...}``
+        from within the text (handles some models that wrap JSON in
+        chain-of-thought).
 
         Parameters
         ----------
@@ -429,12 +473,48 @@ class RiddleGenerator:
             If the text cannot be parsed or validated.
         """
         text = raw.strip()
+        if not text:
+            logger.error("LLM returned empty response")
+            raise ValueError("LLM returned empty response")
         if text.startswith("```"):
-            # Strip markdown code fences
             text = text.removeprefix("```json").removeprefix("```")
             text = text.removesuffix("```").strip()
-        data = json.loads(text)
-        return _validate_riddle_json(data)
+
+        # Try full text first
+        if text.startswith("{"):
+            try:
+                data = json.loads(text)
+                return _validate_riddle_json(data)
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # Fallback: extract the first JSON object from the text
+        start = text.find("{")
+        if start >= 0:
+            depth = 0
+            for end in range(start, len(text)):
+                if text[end] == "{":
+                    depth += 1
+                elif text[end] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        candidate = text[start : end + 1]
+                        try:
+                            data = json.loads(candidate)
+                            logger.info("Extracted JSON from text (len=%d)", len(candidate))
+                            return _validate_riddle_json(data)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                        break  # outermost brace pair didn't parse; stop
+
+        logger.warning(
+            "Failed to parse LLM output as JSON: Raw text (len=%d): %.400s",
+            len(raw),
+            text[:400],
+        )
+        raise ValueError(
+            "Could not extract valid JSON from LLM response."
+        )
 
     def generate(self, plaintext: str, theme: str) -> dict[str, Any]:
         """Generate a riddle + MCQ options for the given plaintext and theme.
@@ -458,7 +538,8 @@ class RiddleGenerator:
         Raises
         ------
         ValueError
-            If the plaintext is empty or exceeds the length limit.
+            If the plaintext is empty or exceeds the length limit, or if the
+            LLM output cannot be parsed as valid JSON.
         RuntimeError
             If all retries are exhausted without producing valid JSON.
         """
@@ -477,9 +558,11 @@ class RiddleGenerator:
                 data = self._parse_response(raw)
                 break
             except (json.JSONDecodeError, ValueError, RuntimeError) as exc:
+                logger.warning("Attempt %d/%d failed: %s", _attempt + 1, self._max_retries + 1, exc)
                 last_error = exc
                 continue
         else:
+            logger.error("All %d attempts exhausted", self._max_retries + 1)
             raise RuntimeError(
                 f"Failed to generate valid riddle after {self._max_retries + 1} attempts."
             ) from last_error

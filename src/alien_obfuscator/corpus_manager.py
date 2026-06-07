@@ -6,11 +6,14 @@ a random excerpt (or multiple excerpts) for any supported theme, which the
 riddle generator then injects into the LLM prompt as creative fodder.
 """
 
+import logging
 import random
 from pathlib import Path
 from typing import Sequence
 
 from alien_obfuscator.config import CORPUS_DIR, THEME_FILES
+
+logger = logging.getLogger(__name__)
 
 
 class CorpusManager:
@@ -54,6 +57,7 @@ class CorpusManager:
         filename = THEME_FILES[theme]
         filepath = self._corpus_dir / filename
         if not filepath.exists():
+            logger.error("Corpus file not found for theme '%s': %s", theme, filepath)
             raise FileNotFoundError(f"Corpus file not found for theme '{theme}': {filepath}")
 
         lines = [line.strip() for line in filepath.read_text(encoding="utf-8").splitlines()]
@@ -88,12 +92,14 @@ class CorpusManager:
             If ``theme`` is not a valid key or ``count`` is not positive.
         """
         if count < 1:
+            logger.warning("get_excerpt called with count=%d", count)
             raise ValueError("count must be at least 1")
 
         if theme == "surprise":
             theme = random.choice(list(THEME_FILES.keys()))
 
         if theme not in self._cache:
+            logger.error("Unknown theme requested: %s", theme)
             raise ValueError(f"Unknown theme: {theme}")
 
         pool = self._cache[theme]

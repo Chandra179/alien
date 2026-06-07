@@ -48,6 +48,7 @@ MAX_RETRIES: Final[int] = 2
 # ---------------------------------------------------------------------------
 DEFAULT_BACKEND: Final[str] = "mock"
 LLM_TIMEOUT_SECONDS: Final[int] = 15
+LLM_MAX_TOKENS: Final[int] = 4096
 
 # Model targets (for HF Spaces)
 PRIMARY_MODEL: Final[str] = "google/gemma-4-31b-it"
