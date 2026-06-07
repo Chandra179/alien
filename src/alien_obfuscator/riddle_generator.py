@@ -232,6 +232,125 @@ class HuggingFaceBackend(LLMBackend):
         return str(data)
 
 
+class OpenAICompatibleBackend(LLMBackend):
+    """Generic backend for any OpenAI-compatible chat completions API.
+
+    Parameters
+    ----------
+    model_id : str
+        Model identifier (e.g. ``"google/gemma-4-31b-it"``).
+    api_key : str | None
+        API key. If ``None``, read from ``key_env_var`` env variable.
+    api_url : str
+        The chat completions endpoint URL.
+    key_env_var : str
+        Environment variable name to look for the API key.
+    provider_name : str
+        Human-readable provider name for error messages.
+    extra_headers : dict
+        Additional HTTP headers to send with each request.
+    """
+
+    def __init__(
+        self,
+        model_id: str,
+        api_key: str | None = None,
+        api_url: str = "",
+        key_env_var: str = "",
+        provider_name: str = "API",
+        extra_headers: dict | None = None,
+    ) -> None:
+        self.model_id = model_id
+        self.api_key = api_key
+        self._api_url = api_url
+        self._key_env_var = key_env_var
+        self._provider_name = provider_name
+        self._extra_headers = extra_headers or {}
+
+    def generate(self, prompt: str) -> str:
+        """Call the chat completions API and return the generated text.
+
+        Parameters
+        ----------
+        prompt : str
+            The prompt to send.
+
+        Returns
+        -------
+        str
+            Raw model output.
+
+        Raises
+        ------
+        RuntimeError
+            If the API request fails or returns an error.
+        """
+        import os
+
+        import requests
+
+        key = self.api_key or os.environ.get(self._key_env_var)
+        if not key:
+            raise RuntimeError(
+                f"{self._provider_name} API key not provided and "
+                f"{self._key_env_var} not found in environment."
+            )
+
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            **self._extra_headers,
+        }
+        payload = {
+            "model": self.model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 256,
+            "temperature": 0.8,
+        }
+
+        response = requests.post(self._api_url, headers=headers, json=payload, timeout=30)
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"{self._provider_name} API error {response.status_code}: {response.text}"
+            )
+
+        data = response.json()
+        choices = data.get("choices", [])
+        if not choices:
+            raise RuntimeError(f"{self._provider_name} returned no choices.")
+        return choices[0].get("message", {}).get("content", "")
+
+
+class OpenRouterBackend(OpenAICompatibleBackend):
+    """Backend for OpenRouter's chat completions API."""
+
+    def __init__(self, model_id: str, api_key: str | None = None) -> None:
+        super().__init__(
+            model_id=model_id,
+            api_key=api_key,
+            api_url="https://openrouter.ai/api/v1/chat/completions",
+            key_env_var="OPENROUTER_API_KEY",
+            provider_name="OpenRouter",
+            extra_headers={
+                "HTTP-Referer": "https://github.com/koala/alien-obfuscator",
+                "X-Title": "Alien Obfuscator",
+            },
+        )
+
+
+class OpenCodeGoBackend(OpenAICompatibleBackend):
+    """Backend for OpenCode Go chat completions API."""
+
+    def __init__(self, model_id: str, api_key: str | None = None) -> None:
+        super().__init__(
+            model_id=model_id,
+            api_key=api_key,
+            api_url="https://opencode.ai/zen/go/v1/chat/completions",
+            key_env_var="OPENCODE_GO_API_KEY",
+            provider_name="OpenCode Go",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Riddle generator
 # ---------------------------------------------------------------------------

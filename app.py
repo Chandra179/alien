@@ -6,9 +6,11 @@ game engine.
 """
 
 import json
+import os
 import random
 
 import gradio as gr
+from dotenv import load_dotenv
 
 from alien_obfuscator.config import (
     DEFAULT_BACKEND,
@@ -22,16 +24,31 @@ from alien_obfuscator.config import (
     THEME_LABELS,
 )
 from alien_obfuscator.corpus_manager import CorpusManager
-from alien_obfuscator.riddle_generator import HuggingFaceBackend, MockBackend, RiddleGenerator
+from alien_obfuscator.riddle_generator import (
+    HuggingFaceBackend,
+    MockBackend,
+    OpenCodeGoBackend,
+    OpenRouterBackend,
+    RiddleGenerator,
+)
 
 # ---------------------------------------------------------------------------
 # Backend bootstrap
 # ---------------------------------------------------------------------------
 
+load_dotenv()
+
 corpus_manager = CorpusManager()
 
-if DEFAULT_BACKEND == "mock":
+backend = os.environ.get("HF_BACKEND", DEFAULT_BACKEND)
+if backend == "mock":
     _backend = MockBackend()
+elif backend == "openrouter":
+    model = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-31b-it")
+    _backend = OpenRouterBackend(model)
+elif backend == "opencode-go":
+    model = os.environ.get("OPENCODE_GO_MODEL", "deepseek-v4-flash")
+    _backend = OpenCodeGoBackend(model)
 else:
     _backend = HuggingFaceBackend("google/gemma-4-31b-it")
 
@@ -737,11 +754,17 @@ if __name__ == "__main__":
     app.launch(
         css="""
         body { background-color: #0d0d0d; color: #e0e0e0; }
-        .gradio-container { font-family: 'Courier New', monospace; }
+        .gradio-container { font-family: 'Courier New', monospace; color: #e0e0e0; }
         .tabitem { background-color: #141414; }
+        .tabitem p, .tabitem h1, .tabitem h2, .tabitem h3,
+        .tabitem li, .tabitem ul, .tabitem ol,
+        .md p, .md h1, .md h2, .md h3,
+        .md li, .md ul, .md ol,
+        .prose, .prose * { color: #e0e0e0; }
         .btn-primary { background-color: #2e8b57; border: none; }
         .btn-primary:hover { background-color: #3cb371; }
         .riddle-box { background-color: #1a1a1a; border-left: 4px solid #2e8b57; padding: 1rem; }
+        .riddle-box * { color: #e0e0e0; }
         .alien-monitor { border: 2px dashed #ff4444; padding: 0.5rem; text-align: center; color: #ff4444; }
 
         @media (max-width: 768px) {
