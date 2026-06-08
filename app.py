@@ -54,6 +54,56 @@ else:
 
 riddle_generator = RiddleGenerator(backend=_backend, corpus_manager=corpus_manager)
 
+TIMER_HTML = """
+<script>
+(function() {
+    function findTimerInput() {
+        var el = document.getElementById('timer-display');
+        if (!el) return null;
+        return el.querySelector('input, textarea');
+    }
+
+    window.startGameTimer = function(durationSeconds) {
+        window.gameEndTime = Date.now() + durationSeconds * 1000;
+        window.riddleStartTime = Date.now();
+        if (window.gameTimerInterval) {
+            clearInterval(window.gameTimerInterval);
+        }
+
+        function updateTimer() {
+            var remainingMs = Math.max(0, window.gameEndTime - Date.now());
+            var remainingSec = Math.floor(remainingMs / 1000);
+            var minutes = Math.floor(remainingSec / 60);
+            var seconds = remainingSec % 60;
+            var timeStr = (minutes < 10 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+
+            var timerInput = findTimerInput();
+            if (timerInput) {
+                timerInput.value = timeStr;
+            }
+
+            if (remainingMs <= 0) {
+                clearInterval(window.gameTimerInterval);
+                var btn = document.getElementById('game-over-trigger');
+                if (btn) {
+                    btn.click();
+                }
+            }
+        }
+
+        updateTimer();
+        window.gameTimerInterval = setInterval(updateTimer, 500);
+    };
+
+    window.stopGameTimer = function() {
+        if (window.gameTimerInterval) {
+            clearInterval(window.gameTimerInterval);
+        }
+    };
+})();
+</script>
+"""
+
 # ---------------------------------------------------------------------------
 # Shared UI helpers
 # ---------------------------------------------------------------------------
@@ -278,7 +328,7 @@ def build_ui() -> gr.Blocks:
     gr.Blocks
         The fully assembled Gradio interface.
     """
-    with gr.Blocks(title="Alien Obfuscator") as demo:
+    with gr.Blocks(title="Alien Obfuscator", head=TIMER_HTML) as demo:
         gr.Markdown("# Alien Obfuscator v1.0")
 
         with gr.Row():
@@ -456,6 +506,7 @@ def build_ui() -> gr.Blocks:
                                     label="Time Remaining",
                                     value="10:00",
                                     interactive=False,
+                                    elem_id="timer-display",
                                 )
                                 score_display = gr.Textbox(
                                     label="Score",
@@ -499,7 +550,13 @@ def build_ui() -> gr.Blocks:
 
                         # Game state is stored in a simple hidden textbox for now
                         game_state = gr.Textbox(visible=False)
-                        game_timer = gr.Timer(value=1.0, active=False)
+                        answer_time_left = gr.Textbox(visible=False)
+
+                        with gr.Row(visible=False):
+                            game_over_trigger = gr.Button(
+                                "Game Over",
+                                elem_id="game-over-trigger",
+                            )
 
                         def on_start_game(theme: str):
                             duration_seconds = DEFAULT_GAME_DURATION_MINUTES * 60
@@ -530,63 +587,47 @@ def build_ui() -> gr.Blocks:
                                 streak_display: "0",
                                 timer_display: f"{DEFAULT_GAME_DURATION_MINUTES:02d}:00",
                                 game_state: state,
-                                game_timer: gr.update(active=True),
                             }
 
-                        def on_timer_tick(state: str):
+                        def on_game_over(state: str) -> tuple:
+                            """Handle game over when the timer expires.
+
+                            Parameters
+                            ----------
+                            state : str
+                                JSON-encoded game state.
+
+                            Returns
+                            -------
+                            tuple
+                                Updates for ``timer_display``, ``game_state``,
+                                ``game_row``, ``game_over_row``, and
+                                ``final_score``.
+                            """
                             if not state:
-                                return (
-                                    "",
-                                    "",
-                                    gr.update(active=False),
-                                    gr.update(visible=False),
-                                    gr.update(visible=False),
-                                    "",
-                                )
+                                return "00:00", "", gr.update(visible=False), gr.update(visible=True), "0"
                             st = json.loads(state)
-                            if not st.get("game_active", False):
-                                return (
-                                    "",
-                                    "",
-                                    gr.update(active=False),
-                                    gr.update(visible=False),
-                                    gr.update(visible=False),
-                                    "",
-                                )
-                            st["time_left"] = max(0, st["time_left"] - 1)
-                            minutes = st["time_left"] // 60
-                            seconds = st["time_left"] % 60
-                            time_str = f"{minutes:02d}:{seconds:02d}"
-                            if st["time_left"] <= 0:
-                                st["game_active"] = False
-                                return (
-                                    time_str,
-                                    json.dumps(st),
-                                    gr.update(active=False),
-                                    gr.update(visible=False),
-                                    gr.update(visible=True),
-                                    str(st["score"]),
-                                )
+                            st["game_active"] = False
+                            st["time_left"] = 0
                             return (
-                                time_str,
+                                "00:00",
                                 json.dumps(st),
-                                gr.update(active=True),
-                                gr.update(visible=True),
                                 gr.update(visible=False),
-                                "",
+                                gr.update(visible=True),
+                                str(st.get("score", 0)),
                             )
 
-                        game_timer.tick(
-                            on_timer_tick,
+                        game_over_trigger.click(
+                            on_game_over,
                             inputs=game_state,
                             outputs=[
                                 timer_display,
                                 game_state,
-                                game_timer,
                                 game_row,
                                 game_over_row,
                                 final_score,
                             ],
+                            js="""(state) => { window.stopGameTimer(); return state; }""",
                         )
 
                         start_btn.click(
@@ -603,22 +644,28 @@ def build_ui() -> gr.Blocks:
                                 streak_display,
                                 timer_display,
                                 game_state,
-                                game_timer,
                             ],
+                            js=f"""(theme) => {{
+                                window.startGameTimer({DEFAULT_GAME_DURATION_MINUTES * 60});
+                                return theme;
+                            }}""",
                         )
 
-                        def on_challenge_answer(selected: str, state: str) -> tuple:
+                        def on_challenge_answer(
+                            selected: str, state: str, current_time_left: int
+                        ) -> tuple:
                             if not selected or not state:
                                 return "", "", state, gr.update(visible=False)
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
+                            st["time_left"] = current_time_left
                             if idx == correct_idx:
                                 points = POINTS_PER_CORRECT
                                 st["streak"] += 1
                                 streak_bonus = st["streak"] * STREAK_BONUS_POINTS
                                 speed_bonus = 0
-                                elapsed = st.get("riddle_start_time", st["time_left"]) - st["time_left"]
+                                elapsed = st.get("riddle_start_time", current_time_left) - current_time_left
                                 if elapsed <= SPEED_BONUS_SECONDS:
                                     speed_bonus = SPEED_BONUS_POINTS
                                 total_points = points + streak_bonus + speed_bonus
@@ -637,20 +684,27 @@ def build_ui() -> gr.Blocks:
 
                         challenge_options.change(
                             on_challenge_answer,
-                            inputs=[challenge_options, game_state],
+                            inputs=[challenge_options, game_state, answer_time_left],
                             outputs=[challenge_feedback, challenge_correct, game_state, challenge_correct],
+                            js="""(selected, state, _) => {
+                                var remainingSec = window.gameEndTime
+                                    ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
+                                    : 0;
+                                return [selected, state, remainingSec];
+                            }""",
                         )
 
-                        def on_next_challenge(state: str) -> tuple:
+                        def on_next_challenge(state: str, current_time_left: int) -> tuple:
                             if not state:
                                 return "", "", [], "", state
                             st = json.loads(state)
                             if not st.get("game_active", False):
                                 return "", "", [], "", state
+                            st["time_left"] = current_time_left
                             riddle, opts, correct = generate_challenge_riddle(st["theme"])
                             options = json.loads(opts)
                             st["correct_index"] = int(correct)
-                            st["riddle_start_time"] = st["time_left"]
+                            st["riddle_start_time"] = current_time_left
                             return (
                                 riddle,
                                 gr.update(
@@ -664,7 +718,7 @@ def build_ui() -> gr.Blocks:
 
                         next_challenge_btn.click(
                             on_next_challenge,
-                            inputs=game_state,
+                            inputs=[game_state, answer_time_left],
                             outputs=[
                                 challenge_riddle,
                                 challenge_options,
@@ -672,6 +726,13 @@ def build_ui() -> gr.Blocks:
                                 challenge_correct,
                                 game_state,
                             ],
+                            js="""(state, _) => {
+                                window.riddleStartTime = Date.now();
+                                var remainingSec = window.gameEndTime
+                                    ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
+                                    : 0;
+                                return [state, remainingSec];
+                            }""",
                         )
 
                         end_game_btn.click(
@@ -679,19 +740,19 @@ def build_ui() -> gr.Blocks:
                                 game_row: gr.update(visible=False),
                                 game_over_row: gr.update(visible=True),
                                 final_score: json.loads(state).get("score", 0) if state else "0",
-                                game_timer: gr.update(active=False),
                             },
                             inputs=game_state,
-                            outputs=[game_row, game_over_row, final_score, game_timer],
+                            outputs=[game_row, game_over_row, final_score],
+                            js="""(state) => { window.stopGameTimer(); return state; }""",
                         )
 
                         new_game_btn.click(
                             lambda: {
                                 game_over_row: gr.update(visible=False),
                                 theme_filter: "All",
-                                game_timer: gr.update(active=False),
                             },
-                            outputs=[game_over_row, theme_filter, game_timer],
+                            outputs=[game_over_row, theme_filter],
+                            js="""() => { window.stopGameTimer(); }""",
                         )
 
                     # ---------------- About ----------------
