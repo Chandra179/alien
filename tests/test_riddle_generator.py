@@ -6,7 +6,6 @@ import pytest
 from pytest_mock import MockerFixture
 
 from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, NUM_OPTIONS
-from alien_obfuscator.corpus_manager import CorpusManager
 from alien_obfuscator.riddle_generator import (
     HuggingFaceBackend,
     MockBackend,
@@ -90,12 +89,8 @@ class TestRiddleGenerator:
     """Tests for the riddle generator orchestrator."""
 
     @pytest.fixture
-    def corpus(self) -> CorpusManager:
-        return CorpusManager()
-
-    @pytest.fixture
-    def mock_gen(self, corpus: CorpusManager) -> RiddleGenerator:
-        return RiddleGenerator(backend=MockBackend(), corpus_manager=corpus)
+    def mock_gen(self) -> RiddleGenerator:
+        return RiddleGenerator(backend=MockBackend())
 
     def test_generate_produces_valid_riddle(self, mock_gen: RiddleGenerator) -> None:
         """A full generation cycle should return a validated, shuffled dict."""
@@ -117,7 +112,7 @@ class TestRiddleGenerator:
         with pytest.raises(ValueError, match="exceeds"):
             mock_gen.generate(long_text, "greek_myth")
 
-    def test_generate_retry_on_malformed_json(self, corpus: CorpusManager, mocker: MockerFixture) -> None:
+    def test_generate_retry_on_malformed_json(self, mocker: MockerFixture) -> None:
         """If the backend returns bad JSON once, the generator should retry."""
         backend = MockBackend()
         mocker.patch.object(
@@ -135,23 +130,23 @@ class TestRiddleGenerator:
                 ),
             ],
         )
-        gen = RiddleGenerator(backend=backend, corpus_manager=corpus, max_retries=1)
+        gen = RiddleGenerator(backend=backend, max_retries=1)
         result = gen.generate("hello", "poetry")
         assert result["options"][result["correct_index"]] == "hello"
 
-    def test_generate_all_retries_fail(self, corpus: CorpusManager, mocker: MockerFixture) -> None:
+    def test_generate_all_retries_fail(self, mocker: MockerFixture) -> None:
         """If every attempt fails, ``RuntimeError`` is raised."""
         backend = MockBackend()
         mocker.patch.object(backend, "generate", return_value="not json")
-        gen = RiddleGenerator(backend=backend, corpus_manager=corpus, max_retries=1)
+        gen = RiddleGenerator(backend=backend, max_retries=1)
         with pytest.raises(RuntimeError, match="Failed"):
             gen.generate("hello", "poetry")
 
-    def test_generate_shuffles_options(self, mock_gen: RiddleGenerator) -> None:
+    def test_generate_shuffles_options(self) -> None:
         """The correct answer should not always be at index 0."""
         # Mock backend always puts correct at index 0, but RiddleGenerator shuffles
         backend = MockBackend()
-        gen = RiddleGenerator(backend=backend, corpus_manager=mock_gen._corpus)
+        gen = RiddleGenerator(backend=backend)
         indices = [gen.generate("test", "shakespeare")["correct_index"] for _ in range(20)]
         # Statistically unlikely that all 20 remain at 0 after shuffling
         assert any(i != 0 for i in indices)

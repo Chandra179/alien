@@ -13,17 +13,25 @@ import gradio as gr
 from dotenv import load_dotenv
 
 from alien_obfuscator.config import (
+    APP_TITLE,
+    CHALLENGE_PHRASES,
     DEFAULT_BACKEND,
     DEFAULT_GAME_DURATION_MINUTES,
+    HF_DEFAULT_MODEL,
+    LAUNCH_SERVER_NAME,
+    LAUNCH_SERVER_PORT,
+    LAUNCH_SHARE,
     MAX_PLAINTEXT_LENGTH,
     NUM_OPTIONS,
+    OPENCODE_GO_DEFAULT_MODEL,
+    OPENROUTER_DEFAULT_MODEL,
     POINTS_PER_CORRECT,
     SPEED_BONUS_POINTS,
     SPEED_BONUS_SECONDS,
     STREAK_BONUS_POINTS,
+    THEME_KEYS,
     THEME_LABELS,
 )
-from alien_obfuscator.corpus_manager import CorpusManager
 from alien_obfuscator.riddle_generator import (
     HuggingFaceBackend,
     MockBackend,
@@ -38,21 +46,19 @@ from alien_obfuscator.riddle_generator import (
 
 load_dotenv()
 
-corpus_manager = CorpusManager()
-
 backend = os.environ.get("HF_BACKEND", DEFAULT_BACKEND)
 if backend == "mock":
     _backend = MockBackend()
 elif backend == "openrouter":
-    model = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-31b-it")
+    model = os.environ.get("OPENROUTER_MODEL", OPENROUTER_DEFAULT_MODEL)
     _backend = OpenRouterBackend(model)
 elif backend == "opencode-go":
-    model = os.environ.get("OPENCODE_GO_MODEL", "mimo-v2.5")
+    model = os.environ.get("OPENCODE_GO_MODEL", OPENCODE_GO_DEFAULT_MODEL)
     _backend = OpenCodeGoBackend(model)
 else:
-    _backend = HuggingFaceBackend("google/gemma-4-31b-it")
+    _backend = HuggingFaceBackend(HF_DEFAULT_MODEL)
 
-riddle_generator = RiddleGenerator(backend=_backend, corpus_manager=corpus_manager)
+riddle_generator = RiddleGenerator(backend=_backend)
 
 TIMER_HTML = """
 <script>
@@ -290,23 +296,11 @@ def generate_challenge_riddle(theme_filter: str) -> tuple[str, str, str]:
         (riddle_text, options_json, correct_index)
     """
     if theme_filter == "All":
-        theme = random.choice(corpus_manager.list_themes())
+        theme = random.choice(THEME_KEYS)
     else:
         theme = theme_filter
 
-    phrases = [
-        "patience is a virtue",
-        "do not count your chickens",
-        "a rolling stone gathers no moss",
-        "the lion's share",
-        "Achilles' heel",
-        "Pandora's box",
-        "star-crossed lovers",
-        "the Midas touch",
-        "Sisyphean task",
-        "Icarus' fall",
-    ]
-    plaintext = random.choice(phrases)
+    plaintext = random.choice(CHALLENGE_PHRASES)
 
     try:
         result = riddle_generator.generate(plaintext, theme)
@@ -329,7 +323,7 @@ def build_ui() -> gr.Blocks:
         The fully assembled Gradio interface.
     """
     with gr.Blocks(title="Alien Obfuscator", head=TIMER_HTML) as demo:
-        gr.Markdown("# Alien Obfuscator v1.0")
+        gr.Markdown(f"# {APP_TITLE}")
 
         with gr.Row():
             with gr.Column(scale=3):
@@ -783,4 +777,4 @@ def build_ui() -> gr.Blocks:
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch()
+    app.launch(server_name=LAUNCH_SERVER_NAME, server_port=LAUNCH_SERVER_PORT, share=LAUNCH_SHARE)

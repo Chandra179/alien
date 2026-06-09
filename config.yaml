@@ -1,0 +1,73 @@
+app:
+  title: "Alien Obfuscator v1.0"
+  launch:
+    server_name: "0.0.0.0"
+    server_port: 7860
+    share: false
+
+models:
+  primary: "google/gemma-4-31b-it"
+  fallback: "google/gemma-4-26b-a4b-it"
+  max_parameters: 32000000000
+
+backends:
+  hf:
+    default_model: "google/gemma-4-31b-it"
+    url_prefix: "https://api-inference.huggingface.co/models"
+    timeout: 30
+  openrouter:
+    default_model: "google/gemma-4-31b-it"
+    url: "https://openrouter.ai/api/v1/chat/completions"
+    timeout: 120
+  opencode-go:
+    default_model: "mimo-v2.5"
+    url: "https://opencode.ai/zen/go/v1/chat/completions"
+    timeout: 120
+
+llm:
+  temperature: 0.8
+  max_tokens: 4096
+  timeout_seconds: 15
+
+riddle:
+  max_plaintext_length: 100
+  max_riddle_length: 500
+  num_options: 5
+  max_retries: 2
+
+game:
+  default_duration_minutes: 10
+  min_duration_minutes: 1
+  max_duration_minutes: 30
+  points_per_correct: 10
+  speed_bonus_seconds: 15
+  speed_bonus_points: 5
+  streak_bonus_points: 3
+
+themes:
+  labels:
+    greek_myth: "Greek / Roman Mythology"
+    shakespeare: "Shakespeare"
+    grimm: "Grimms' Fairy Tales / Folklore"
+    poetry: "Classic Poetry"
+    chinese_classics: "Chinese Classics"
+    surprise: "Surprise Me"
+
+challenge_phrases:
+  - "patience is a virtue"
+  - "do not count your chickens"
+  - "a rolling stone gathers no moss"
+  - "the lion's share"
+  - "Achilles' heel"
+  - "Pandora's box"
+  - "star-crossed lovers"
+  - "the Midas touch"
+  - "Sisyphean task"
+  - "Icarus' fall"
+
+mock_backend:
+  distractors:
+    - "a wrong answer"
+    - "another wrong answer"
+    - "yet another wrong answer"
+    - "the last wrong answer"

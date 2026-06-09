@@ -1,7 +1,6 @@
 """Alien Obfuscator — Encode messages as riddles drawn from ancient texts."""
 
 from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, NUM_OPTIONS
-from alien_obfuscator.corpus_manager import CorpusManager
 from alien_obfuscator.riddle_generator import (
     HuggingFaceBackend,
     LLMBackend,
@@ -14,7 +13,6 @@ from alien_obfuscator.riddle_generator import (
 )
 
 __all__ = [
-    "CorpusManager",
     "HuggingFaceBackend",
     "LLMBackend",
     "MockBackend",

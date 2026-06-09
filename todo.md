@@ -47,7 +47,30 @@
 - [x] Write README.md
 - [ ] Record demo video + social post
 
-## Phase 5: Final Checks
+## Phase 5: Config Extraction & Bug Fixes
+- [x] Create config.yaml with all operational parameters
+- [x] Update config.py to load from config.yaml with fallback defaults
+- [x] Use config for LLM temperature, timeouts, API URLs
+- [x] Use config for mock backend distractors
+- [x] Use config for challenge mode phrases
+- [x] Use config for app title and launch parameters
+- [x] Use PRIMARY_MODEL constant in app.py instead of hardcoded strings
+- [x] Fix: `_parse_response` code fence stripping handles uppercase specifiers (```JSON)
+- [x] Fix: `_parse_response` fallback tries subsequent `{...}` blocks after a failed parse
+- [ ] Fix: Solve tab `check_answer()` — current design cannot validate answers (needs re-architecture)
+
+## Phase 6: Corpus → LLM-Generated
+- [x] Delete corpus/*.txt static files + corpus/ directory
+- [x] Delete corpus_manager.py — no longer needed
+- [x] Update RiddleGenerator to drop corpus_manager dependency
+- [x] Remove CorpusManager import/usage from app.py and __init__.py
+- [x] Update _build_prompt — LLM draws on its own training knowledge, no static excerpt injected
+- [x] Add THEME_KEYS to config.py for challenge mode theme selection
+- [x] Delete tests/test_corpus_manager.py
+- [x] Update tests/test_riddle_generator.py — remove corpus fixture
+- [x] Update plan/gameplan-deepseek.md — corpus now LLM-generated
+
+## Phase 7: Final Checks
 - [x] Run full test suite (make test) — 29/29 passing
 - [x] Run lint + type check (make lint, make ty)
 - [x] Verify parameter budget in README

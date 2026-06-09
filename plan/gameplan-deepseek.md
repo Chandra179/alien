@@ -20,12 +20,7 @@ An alien intelligence monitors all human communications. Resistance fighters enc
 │         │                 │                  │        │
 │  ┌──────┴─────────────────┴──────────────────┴──────┐  │
 │  │              Riddle Generator (LLM)              │  │
-│  │    Prompt + Corpus Excerpt → Riddle + 5 MCQs     │  │
-│  └────────────────────────┬────────────────────────┘  │
-│                           │                           │
-│  ┌────────────────────────┴────────────────────────┐  │
-│  │              Corpus Manager                      │  │
-│  │  Greek Myth │ Shakespeare │ Grimm │ Poetry │ ... │  │
+│  │    Theme + Prompt → Riddle + 5 MCQs              │  │
 │  └─────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
 ```
@@ -47,11 +42,10 @@ An alien intelligence monitors all human communications. Resistance fighters enc
 - *Surprise Me* (randomly selected theme)
 
 **FR-1.3** On clicking "Encrypt", the system:
-1. Selects a random excerpt from the chosen theme's corpus (1-2 snippets, ~500 chars each)
-2. Constructs a prompt that includes: the source text excerpt(s), the plaintext message, and formatting instructions
-3. Calls the LLM to generate a riddle + 5 answer options
-4. Returns a structured JSON: `{riddle, options: [5 strings], correct_index: 0-4, theme}`
-5. Displays the riddle beautifully in the UI
+1. Constructs a prompt that includes: the theme, the plaintext message, and formatting instructions
+2. Calls the LLM to generate a riddle + 5 answer options (LLM draws on training knowledge for cultural context)
+3. Returns a structured JSON: `{riddle, options: [5 strings], correct_index: 0-4, theme}`
+4. Displays the riddle beautifully in the UI
 
 **FR-1.4** If the LLM response fails to parse as valid JSON, retry once with a stricter prompt. If still failing, show a friendly error with a "try again" button.
 
@@ -80,7 +74,7 @@ An alien intelligence monitors all human communications. Resistance fighters enc
 
 ### FR-3: Timed Game Mode
 
-**FR-3.1** A "Challenge Mode" separate tab where the app auto-generates riddles from random themes and random plaintext concepts (sourced from a "message bank" — a curated list of common phrases, proverbs, idioms, and concepts drawn from the same source texts).
+**FR-3.1** A "Challenge Mode" separate tab where the app auto-generates riddles from random themes and random plaintext concepts (sourced from a "message bank" — a curated list of common phrases, proverbs, idioms, and concepts).
 
 **FR-3.2** Each round presents one riddle + 5 options. The player has 10 minutes (default, configurable) to solve as many as possible.
 
@@ -155,17 +149,17 @@ An alien intelligence monitors all human communications. Resistance fighters enc
 
 ## Corpus Content Plan
 
-Each theme contains 8–12 curated excerpts (200–800 characters each) from public domain works. Each excerpt is a self-contained nugget of wisdom, a vivid scene, or a memorable phrase — perfect fodder for a riddle.
+The corpus is **LLM-generated on the fly** — no static text files are needed. The LLM draws on its pre-training knowledge of mythology, literature, and folklore to produce thematically authentic riddles. The theme name in the prompt (e.g. "Greek / Roman Mythology") is sufficient context.
 
-| Theme | Source Texts | Example Content |
-|-------|-------------|-----------------|
+| Theme | LLM Draws From | Example Ground |
+|-------|---------------|-----------------|
 | Greek/Roman Myth | Ovid's Metamorphoses, Homeric Hymns, Bullfinch's Mythology | "Icarus flew too close to the sun..." |
 | Shakespeare | Hamlet, Macbeth, A Midsummer Night's Dream, Sonnets | "To thine own self be true..." |
 | Grimms' Fairy Tales | Household Tales, Hans Christian Andersen | "Mirror mirror on the wall..." |
 | Classic Poetry | Emily Dickinson, William Blake, Walt Whitman | "Because I could not stop for Death..." |
 | Chinese Classics | Sun Tzu's Art of War, Tao Te Ching, Analects | "The supreme art of war is to subdue the enemy without fighting." |
 
-**Message Bank** (plaintext concepts to auto-riddle in game mode) — 30–50 items like:
+**Message Bank** (plaintext concepts to auto-riddle in game mode) — configurable list in `config.yaml`:
 "patience is a virtue", "don't count your chickens", "a rolling stone gathers no moss",
 "the lion's share", "Achilles' heel", "Pandora's box", "star-crossed lovers", etc.
 
@@ -248,15 +242,8 @@ Note: The options array is always shuffled so the correct answer appears in a ra
 ```
 alien-obfuscator/
 ├── app.py                  # Gradio UI (tabs, layout, CSS)
-├── config.py               # Constants, model settings, paths
-├── corpus/
-│   ├── __init__.py
-│   ├── manager.py          # Loads, selects, caches excerpts
-│   ├── greek_myth.txt      # Curated excerpts
-│   ├── shakespeare.txt
-│   ├── grimm.txt
-│   ├── poetry.txt
-│   └── chinese_classics.txt
+├── config.py               # Constants, model settings, paths (loads config.yaml)
+├── config.yaml             # Operational parameters
 ├── riddle_generator.py     # Prompt builder + LLM abstraction
 ├── game_engine.py          # Timer, scoring, game state
 ├── ui_components.py        # Reusable Gradio blocks (riddle card, timer, etc.)
@@ -307,8 +294,8 @@ alien-obfuscator/
 
 1. The riddle **IS** the encryption. Solving the riddle *is* decrypting. No separate cipher layer.
 2. The LLM generates the riddle + 1 correct answer + 4 plausible distractors (5 total MCQ options).
-3. The LLM composes riddles using random excerpts from a curated public domain corpus (hybrid approach — real texts used as creative springboard).
-4. Corpus themes: Greek/Roman Mythology, Shakespeare, Grimms' Fairy Tales, Classic Poetry, Chinese Classics. No religious texts.
+3. The LLM composes riddles drawing directly from its pre-training knowledge of the chosen theme — no static corpus files needed.
+4. Themes: Greek/Roman Mythology, Shakespeare, Grimms' Fairy Tales, Classic Poetry, Chinese Classics. No religious texts.
 5. Sender sees the correct answer highlighted after generation for verification.
 6. Solver gets unlimited retry attempts on a friend's riddle; attempt count tracked for fun.
 7. Challenge mode: 10-minute default timer, customizable 1–30 minutes.
