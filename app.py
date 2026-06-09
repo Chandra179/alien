@@ -610,8 +610,7 @@ def build_ui() -> gr.Blocks:
     gr.Blocks
         The fully assembled Gradio interface with Fallout themed terminal style.
     """
-    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML
-    with gr.Blocks(title="Alien Obfuscator", css=FALLOUT_CSS, head=head_html_content) as demo:
+    with gr.Blocks(title="Alien Obfuscator") as demo:
         gr.HTML("""
         <div class="terminal-header">
             <div class="terminal-header-text">========================================================================
@@ -1095,13 +1094,15 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         )
 
                         end_game_btn.click(
-                            lambda state: {
-                                game_row: gr.update(visible=False),
-                                game_over_row: gr.update(visible=True),
-                                final_score: json.loads(state).get("score", 0) if state else "0",
-                            },
+                            on_game_over,
                             inputs=game_state,
-                            outputs=[game_row, game_over_row, final_score],
+                            outputs=[
+                                timer_display,
+                                game_state,
+                                game_row,
+                                game_over_row,
+                                final_score,
+                            ],
                             js="""(state) => { window.stopGameTimer(); return state; }""",
                         )
 
@@ -1142,4 +1143,5 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch()
+    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML
+    app.launch(css=FALLOUT_CSS, head=head_html_content)

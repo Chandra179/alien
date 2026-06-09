@@ -107,3 +107,16 @@ def test_challenge_handlers() -> None:
     # Unpack to verify tuple unpacking compatibility
     timer_display, game_state_val, game_row_val, game_over_row_val, final_score_val = res_go
     assert timer_display == "00:00"
+
+    # 5. Verify that both "Game Over" trigger and "End Game" buttons are wired to on_game_over
+    game_over_targets = []
+    for bf in demo.fns.values():
+        fn = getattr(bf, "fn", None)
+        if fn and fn.__name__ == "on_game_over":
+            for target_id in bf.targets:
+                if target_id[0] in demo.blocks:
+                    block = demo.blocks[target_id[0]]
+                    game_over_targets.append(getattr(block, "value", None))
+
+    assert "Game Over" in game_over_targets
+    assert "> END GAME" in game_over_targets
