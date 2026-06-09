@@ -11,7 +11,7 @@ from pathlib import Path
 # Ensure root directory is in path so we can import app.py
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app import build_ui
+from app import build_ui, GameOverResult, ChallengeAnswerResult, NextChallengeResult
 
 
 def test_challenge_handlers() -> None:
@@ -20,12 +20,14 @@ def test_challenge_handlers() -> None:
     This test extracts the registered event handlers from the built Gradio
     UI Blocks object, executes them with both string and integer time inputs,
     and asserts that they calculate scoring, streaks, and elapsed times
-    without throwing any TypeError.
+    without throwing any TypeError. It also validates that the returned
+    values are instances of our custom class results and their properties.
     """
     demo = build_ui()
 
     on_challenge_answer_fn = None
     on_next_challenge_fn = None
+    on_game_over_fn = None
 
     for bf in demo.fns.values():
         fn = getattr(bf, "fn", None)
@@ -34,9 +36,12 @@ def test_challenge_handlers() -> None:
                 on_challenge_answer_fn = fn
             elif fn.__name__ == "on_next_challenge":
                 on_next_challenge_fn = fn
+            elif fn.__name__ == "on_game_over":
+                on_game_over_fn = fn
 
     assert on_challenge_answer_fn is not None, "on_challenge_answer not found"
     assert on_next_challenge_fn is not None, "on_next_challenge not found"
+    assert on_game_over_fn is not None, "on_game_over not found"
 
     # Test state dictionary
     initial_state = {
@@ -52,29 +57,53 @@ def test_challenge_handlers() -> None:
 
     # 1. Test on_challenge_answer with a string for current_time_left
     # selected option is 'A', which is correct (index 0)
-    fb, reveal, next_state, update, radio_update = on_challenge_answer_fn("A) Option A", state_str, "115")
-
-    assert "Correct!" in fb
-    assert reveal == ""
-    st = json.loads(next_state)
+    res_ans = on_challenge_answer_fn("A) Option A", state_str, "115")
+    assert isinstance(res_ans, ChallengeAnswerResult)
+    assert "Correct!" in res_ans.feedback
+    assert res_ans.reveal == ""
+    st = json.loads(res_ans.updated_state)
     assert st["time_left"] == 115
     assert st["streak"] == 3
     assert st["score"] > 10
-    assert radio_update.get("interactive") is False
+    assert res_ans.interactive_update.get("interactive") is False
+
+    # Unpack to verify tuple unpacking compatibility
+    fb, reveal, next_state, update, radio_update = res_ans
+    assert fb == res_ans.feedback
+    assert reveal == res_ans.reveal
 
     # 2. Test on_challenge_answer with integer current_time_left
-    fb_int, reveal_int, next_state_int, _, radio_update_int = on_challenge_answer_fn("B) Option B", state_str, 115)
-    assert "Wrong!" in fb_int
-    st_int = json.loads(next_state_int)
+    res_ans_wrong = on_challenge_answer_fn("B) Option B", state_str, 115)
+    assert isinstance(res_ans_wrong, ChallengeAnswerResult)
+    assert "Wrong!" in res_ans_wrong.feedback
+    st_int = json.loads(res_ans_wrong.updated_state)
     assert st_int["time_left"] == 115
     assert st_int["streak"] == 0
-    assert radio_update_int.get("interactive") is False
+    assert res_ans_wrong.interactive_update.get("interactive") is False
 
     # 3. Test on_next_challenge with string current_time_left
-    riddle, opt_upd, fb_nc, rev_nc, state_nc = on_next_challenge_fn(state_str, "100")
-    assert fb_nc == ""
-    assert rev_nc == ""
-    assert opt_upd.get("interactive") is True
-    st_nc = json.loads(state_nc)
+    res_nc = on_next_challenge_fn(state_str, "100")
+    assert isinstance(res_nc, NextChallengeResult)
+    assert res_nc.feedback == ""
+    assert res_nc.reveal == ""
+    assert res_nc.options_update.get("interactive") is True
+    st_nc = json.loads(res_nc.updated_state)
     assert st_nc["time_left"] == 100
     assert st_nc["riddle_start_time"] == 100
+
+    # Unpack to verify tuple unpacking compatibility
+    riddle, opt_upd, fb_nc, rev_nc, state_nc = res_nc
+    assert riddle == res_nc.riddle
+
+    # 4. Test on_game_over
+    res_go = on_game_over_fn(state_str)
+    assert isinstance(res_go, GameOverResult)
+    assert res_go.timer_display == "00:00"
+    st_go = json.loads(res_go.game_state)
+    assert st_go["game_active"] is False
+    assert st_go["time_left"] == 0
+    assert res_go.final_score == "10"
+
+    # Unpack to verify tuple unpacking compatibility
+    timer_display, game_state_val, game_row_val, game_over_row_val, final_score_val = res_go
+    assert timer_display == "00:00"
