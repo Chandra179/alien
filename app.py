@@ -8,7 +8,7 @@ game engine.
 import json
 import os
 import random
-from typing import Any, Tuple, Union
+from typing import Any, NamedTuple, Union
 
 import gradio as gr
 from dotenv import load_dotenv
@@ -525,6 +525,78 @@ def generate_challenge_riddle(theme_filter: str) -> tuple[str, str, str]:
         return f"Error: {exc}", "[]", "-1"
 
 
+class GameOverResult(NamedTuple):
+    """Result returned by the game over event handler.
+
+    Attributes
+    ----------
+    timer_display : str
+        Display string for the timer, typically set to "00:00".
+    game_state : str
+        JSON-encoded game state.
+    game_row : Any
+        Gradio update dict for the game row visibility.
+    game_over_row : Any
+        Gradio update dict for the game over row visibility.
+    final_score : str
+        The final score as a string.
+    """
+
+    timer_display: str
+    game_state: str
+    game_row: Any
+    game_over_row: Any
+    final_score: str
+
+
+class ChallengeAnswerResult(NamedTuple):
+    """Result returned by the challenge answer event handler.
+
+    Attributes
+    ----------
+    feedback : str
+        Response message regarding correctness and points.
+    reveal : str
+        Correct answer representation if incorrect, else empty string.
+    updated_state : str
+        Updated JSON-serialized game state.
+    visibility_update : Any
+        Gradio update dict for solution visibility.
+    interactive_update : Any
+        Gradio update dict to disable challenge options.
+    """
+
+    feedback: str
+    reveal: str
+    updated_state: str
+    visibility_update: Any
+    interactive_update: Any
+
+
+class NextChallengeResult(NamedTuple):
+    """Result returned by the next challenge event handler.
+
+    Attributes
+    ----------
+    riddle : str
+        The new riddle question.
+    options_update : Any
+        Gradio update containing new answer options.
+    feedback : Any
+        Cleared feedback message or updated component.
+    reveal : str
+        Cleared correct answer reveal message.
+    updated_state : str
+        Updated JSON-serialized game state.
+    """
+
+    riddle: str
+    options_update: Any
+    feedback: Any
+    reveal: str
+    updated_state: str
+
+
 # ---------------------------------------------------------------------------
 # Gradio UI
 # ---------------------------------------------------------------------------
@@ -538,8 +610,7 @@ def build_ui() -> gr.Blocks:
     gr.Blocks
         The fully assembled Gradio interface with Fallout themed terminal style.
     """
-    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML
-    with gr.Blocks(title="Alien Obfuscator", css=FALLOUT_CSS, head=head_html_content) as demo:
+    with gr.Blocks(title="Alien Obfuscator") as demo:
         gr.HTML("""
         <div class="terminal-header">
             <div class="terminal-header-text">========================================================================
@@ -802,6 +873,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 challenge_options: gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
                                     value=None,
+                                    interactive=True,
                                 ),
                                 challenge_feedback: "",
                                 challenge_correct: gr.update(visible=False),
@@ -811,8 +883,11 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 game_state: state,
                             }
 
-                        def on_game_over(state: str) -> tuple:
+                        def on_game_over(state: str) -> GameOverResult:
                             """Handle game over when the timer expires.
+
+                            This function takes the current JSON-encoded state, marks the game as inactive,
+                            sets remaining time to zero, and prepares the UI transition to the game over screen.
 
                             Parameters
                             ----------
@@ -821,17 +896,18 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                             Returns
                             -------
-                            tuple
-                                Updates for ``timer_display``, ``game_state``,
-                                ``game_row``, ``game_over_row``, and
-                                ``final_score``.
+                            GameOverResult
+                                Custom result object containing timer display, game state, UI visibility
+                                updates, and the final score.
                             """
                             if not state:
-                                return "00:00", "", gr.update(visible=False), gr.update(visible=True), "0"
+                                return GameOverResult(
+                                    "00:00", "", gr.update(visible=False), gr.update(visible=True), "0"
+                                )
                             st = json.loads(state)
                             st["game_active"] = False
                             st["time_left"] = 0
-                            return (
+                            return GameOverResult(
                                 "00:00",
                                 json.dumps(st),
                                 gr.update(visible=False),
@@ -875,7 +951,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         def on_challenge_answer(
                             selected: str, state: str, current_time_left: Union[str, int]
-                        ) -> Tuple[str, str, str, Any]:
+                        ) -> ChallengeAnswerResult:
                             """Handle the submission of a challenge answer and update game state.
 
                             This function takes the selected answer, current JSON-encoded state,
@@ -894,12 +970,9 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                             Returns
                             -------
-                            Tuple[str, str, str, Any]
-                                A tuple containing:
-                                - feedback (str): Response message regarding correctness and points.
-                                - reveal (str): Correct answer representation if incorrect, else empty string.
-                                - updated_state (str): Updated JSON-serialized game state.
-                                - visibility_update (Any): Gradio update dict for solution visibility.
+                            ChallengeAnswerResult
+                                Custom result object containing feedback, reveal message, updated game state,
+                                solution visibility update, and interaction states.
                             """
                             try:
                                 current_time_left_int = int(current_time_left)
@@ -907,7 +980,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 current_time_left_int = 0
 
                             if not selected or not state:
-                                return "", "", state, gr.update(visible=False)
+                                return ChallengeAnswerResult("", "", state, gr.update(visible=False), gr.update())
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
@@ -932,12 +1005,20 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 st["streak"] = 0
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
-                            return fb, reveal, json.dumps(st), gr.update(visible=True)
+                            return ChallengeAnswerResult(
+                                fb, reveal, json.dumps(st), gr.update(visible=True), gr.update(interactive=False)
+                            )
 
                         challenge_options.change(
                             on_challenge_answer,
                             inputs=[challenge_options, game_state, answer_time_left],
-                            outputs=[challenge_feedback, challenge_correct, game_state, challenge_correct],
+                            outputs=[
+                                challenge_feedback,
+                                challenge_correct,
+                                game_state,
+                                challenge_correct,
+                                challenge_options,
+                            ],
                             js="""(selected, state, _) => {
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
@@ -946,9 +1027,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             }""",
                         )
 
-                        def on_next_challenge(
-                            state: str, current_time_left: Union[str, int]
-                        ) -> Tuple[str, Any, Any, str, str]:
+                        def on_next_challenge(state: str, current_time_left: Union[str, int]) -> NextChallengeResult:
                             """Generate the next riddle challenge and update game state.
 
                             This function parses the current state, generates a new challenge riddle
@@ -964,13 +1043,9 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                             Returns
                             -------
-                            Tuple[str, Any, Any, str, str]
-                                A tuple containing:
-                                - riddle (str): The new riddle question.
-                                - options_update (Any): Gradio update containing new answer options.
-                                - feedback (Any): Cleared feedback message or updated component.
-                                - reveal (str): Cleared correct answer reveal message.
-                                - updated_state (str): Updated JSON-serialized game state.
+                            NextChallengeResult
+                                Custom result object containing the new riddle, options update, cleared feedback,
+                                cleared reveal message, and the updated game state.
                             """
                             try:
                                 current_time_left_int = int(current_time_left)
@@ -978,20 +1053,21 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 current_time_left_int = 0
 
                             if not state:
-                                return "", "", [], "", state
+                                return NextChallengeResult("", "", [], "", state)
                             st = json.loads(state)
                             if not st.get("game_active", False):
-                                return "", "", [], "", state
+                                return NextChallengeResult("", "", [], "", state)
                             st["time_left"] = current_time_left_int
                             riddle, opts, correct = generate_challenge_riddle(st["theme"])
                             options = json.loads(opts)
                             st["correct_index"] = int(correct)
                             st["riddle_start_time"] = current_time_left_int
-                            return (
+                            return NextChallengeResult(
                                 riddle,
                                 gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
                                     value=None,
+                                    interactive=True,
                                 ),
                                 "",
                                 "",
@@ -1018,13 +1094,15 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         )
 
                         end_game_btn.click(
-                            lambda state: {
-                                game_row: gr.update(visible=False),
-                                game_over_row: gr.update(visible=True),
-                                final_score: json.loads(state).get("score", 0) if state else "0",
-                            },
+                            on_game_over,
                             inputs=game_state,
-                            outputs=[game_row, game_over_row, final_score],
+                            outputs=[
+                                timer_display,
+                                game_state,
+                                game_row,
+                                game_over_row,
+                                final_score,
+                            ],
                             js="""(state) => { window.stopGameTimer(); return state; }""",
                         )
 
@@ -1065,4 +1143,5 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch()
+    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML
+    app.launch(css=FALLOUT_CSS, head=head_html_content)
