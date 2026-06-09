@@ -105,6 +105,210 @@ TIMER_HTML = """
 """
 
 # ---------------------------------------------------------------------------
+# Custom Fallout / RobCo Terminal Styling
+# ---------------------------------------------------------------------------
+
+FALLOUT_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+/* Apply VT323 retro font and scanline styles to all components */
+body, .gradio-container, .gradio-container * {
+    font-family: 'VT323', 'Courier New', Courier, monospace !important;
+    font-size: 1.25rem !important;
+    border-radius: 0px !important;
+    box-shadow: none !important;
+    line-height: 1.3 !important;
+}
+
+body {
+    background-color: #030703 !important;
+    color: #33ff33 !important;
+    margin: 0;
+    padding: 0;
+}
+
+/* Subtle scanlines overlay simulating CRT screen */
+body::before {
+    content: " ";
+    display: block;
+    position: fixed;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.22) 50%
+    );
+    background-size: 100% 4px;
+    z-index: 99999;
+    pointer-events: none;
+}
+
+/* Container framing with classic terminal border and CRT glow */
+.gradio-container {
+    background-color: #030703 !important;
+    border: 3px solid #33ff33 !important;
+    box-shadow: 0 0 25px rgba(51, 255, 51, 0.25) inset, 0 0 15px rgba(51, 255, 51, 0.15) !important;
+    max-width: 950px !important;
+    margin: 40px auto !important;
+    padding: 25px !important;
+}
+
+/* Headers with glow effects */
+h1, h2, h3, h4, h5, h6 {
+    color: #33ff33 !important;
+    text-shadow: 0 0 8px rgba(51, 255, 51, 0.8) !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+}
+h1 { font-size: 2.4rem !important; }
+h2 { font-size: 1.9rem !important; }
+h3 { font-size: 1.6rem !important; }
+
+/* Plain text and label adjustments */
+p, span, li {
+    color: #33ff33 !important;
+    text-shadow: 0 0 3px rgba(51, 255, 51, 0.5) !important;
+}
+
+/* Flat solid terminal panels for all Gradio blocks */
+.block, .form, .panel, .gr-box, .gr-panel, .gr-block {
+    background-color: #000000 !important;
+    border: 1px solid #33ff33 !important;
+    padding: 15px !important;
+    margin-bottom: 12px !important;
+}
+
+/* Text Inputs, textareas, and select menus */
+input, textarea, select, .gr-input, .gr-textarea {
+    background-color: #000000 !important;
+    color: #33ff33 !important;
+    border: 1px solid #33ff33 !important;
+    font-family: 'VT323', monospace !important;
+    padding: 8px !important;
+    text-shadow: 0 0 3px rgba(51, 255, 51, 0.5) !important;
+}
+input::placeholder, textarea::placeholder {
+    color: #1a5c1a !important;
+    text-shadow: none !important;
+}
+input:focus, textarea:focus, select:focus {
+    border-color: #33ff33 !important;
+    box-shadow: 0 0 10px rgba(51, 255, 51, 0.7) !important;
+    outline: none !important;
+}
+
+/* Dropdown menus & wrappers */
+.dropdown-menu, .options, .select-wrap, .dropdown, select {
+    background-color: #000000 !important;
+    color: #33ff33 !important;
+    border: 1px solid #33ff33 !important;
+}
+
+/* Retro buttons with glowing hover state */
+button, .gr-button {
+    background-color: #0d1f0d !important;
+    color: #33ff33 !important;
+    border: 1px solid #33ff33 !important;
+    text-transform: uppercase !important;
+    font-weight: bold !important;
+    font-family: 'VT323', monospace !important;
+    padding: 8px 16px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    text-shadow: 0 0 3px rgba(51, 255, 51, 0.5) !important;
+}
+button:hover, .gr-button:hover {
+    background-color: #33ff33 !important;
+    color: #000000 !important;
+    box-shadow: 0 0 12px rgba(51, 255, 51, 0.8) !important;
+    text-shadow: none !important;
+}
+button:disabled, .gr-button:disabled {
+    background-color: #010301 !important;
+    color: #114411 !important;
+    border-color: #114411 !important;
+    cursor: not-allowed !important;
+    text-shadow: none !important;
+}
+
+/* Tab bar customization */
+.tab-nav, [role="tablist"], .tabs {
+    border-bottom: 2px solid #33ff33 !important;
+    background-color: #000000 !important;
+    margin-bottom: 15px !important;
+}
+.tab-nav button, [role="tab"], .tabs button {
+    background-color: transparent !important;
+    color: #22aa22 !important;
+    border: none !important;
+    font-size: 1.5rem !important;
+    padding: 10px 18px !important;
+}
+.tab-nav button:hover, [role="tab"]:hover, .tabs button:hover {
+    color: #33ff33 !important;
+}
+.tab-nav button.selected, [aria-selected="true"], .tabs button.selected, .tabitem.selected {
+    color: #33ff33 !important;
+    border: 1px solid #33ff33 !important;
+    border-bottom: 1px solid #030703 !important;
+    background-color: #0d1f0d !important;
+    text-shadow: 0 0 6px rgba(51, 255, 51, 0.8) !important;
+}
+
+/* Header style specifically for terminal branding */
+.terminal-header {
+    border-bottom: 2px dashed #33ff33 !important;
+    margin-bottom: 20px !important;
+    padding-bottom: 10px !important;
+}
+.terminal-header-text {
+    font-family: 'VT323', monospace !important;
+    color: #33ff33 !important;
+    text-shadow: 0 0 5px rgba(51, 255, 51, 0.7) !important;
+    line-height: 1.2 !important;
+    white-space: pre;
+}
+
+/* Text labels on panels and widgets */
+.block-label, .gr-block-label, label, label span {
+    background-color: #000000 !important;
+    color: #33ff33 !important;
+    font-family: 'VT323', monospace !important;
+    text-transform: uppercase !important;
+    font-weight: bold !important;
+}
+
+/* Custom styles for checkboxes and radios */
+.gr-radio, input[type="radio"], input[type="checkbox"] {
+    accent-color: #33ff33 !important;
+}
+.gr-radio label, .radio-group label {
+    border: 1px solid #22aa22 !important;
+    color: #22aa22 !important;
+    background-color: #000000 !important;
+}
+.gr-radio label.selected, .radio-group label.selected {
+    border-color: #33ff33 !important;
+    color: #33ff33 !important;
+    background-color: #0d1f0d !important;
+    text-shadow: 0 0 4px rgba(51, 255, 51, 0.7) !important;
+}
+
+/* Inner elements for custom look */
+.copy-btn, button.svelte-custom {
+    background-color: #050a05 !important;
+    border: 1px solid #33ff33 !important;
+    color: #33ff33 !important;
+}
+"""
+
+GOOGLE_FONT_HTML = """
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+"""
+
+
+# ---------------------------------------------------------------------------
 # Shared UI helpers
 # ---------------------------------------------------------------------------
 
@@ -326,10 +530,20 @@ def build_ui() -> gr.Blocks:
     Returns
     -------
     gr.Blocks
-        The fully assembled Gradio interface.
+        The fully assembled Gradio interface with Fallout themed terminal style.
     """
-    with gr.Blocks(title="Alien Obfuscator", head=TIMER_HTML) as demo:
-        gr.Markdown("# Alien Obfuscator v1.0")
+    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML
+    with gr.Blocks(title="Alien Obfuscator", css=FALLOUT_CSS, head=head_html_content) as demo:
+        gr.HTML("""
+        <div class="terminal-header">
+            <div class="terminal-header-text">========================================================================
+ROBCO INDUSTRIES (TM) UNIFIED OPERATING SYSTEM
+COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
+- USER: OUTLANDER
+- SECURE TERMINAL: ALIEN-OBFUSCATOR-v1.0
+========================================================================</div>
+        </div>
+        """)
 
         with gr.Row():
             with gr.Column(scale=3):
@@ -339,7 +553,7 @@ def build_ui() -> gr.Blocks:
                         with gr.Row():
                             with gr.Column():
                                 plaintext_input = gr.Textbox(
-                                    label="Message to encrypt",
+                                    label="[ INPUT: MESSAGE TO ENCRYPT ]",
                                     placeholder="Enter your secret message...",
                                     lines=2,
                                     max_lines=3,
@@ -347,24 +561,24 @@ def build_ui() -> gr.Blocks:
                                 theme_dropdown = gr.Dropdown(
                                     choices=[(label, key) for key, label in THEME_LABELS.items()],
                                     value="greek_myth",
-                                    label="Theme",
+                                    label="[ PARAM: THEME SELECT ]",
                                 )
-                                encrypt_btn = gr.Button("Encrypt")
+                                encrypt_btn = gr.Button("> ENCRYPT")
 
                         with gr.Row(visible=False) as encrypt_output_row:
                             with gr.Column():
                                 riddle_card = gr.Textbox(
-                                    label="Generated Riddle",
+                                    label="[ OUTPUT: GENERATED RIDDLE CARD ]",
                                     lines=10,
                                     interactive=False,
                                     buttons=["copy"],
                                 )
                                 correct_hint = gr.Textbox(
-                                    label="Correct Answer (sender only)",
+                                    label="[ SECURE DATA: CORRECT ANSWER ]",
                                     interactive=False,
                                 )
                                 encrypt_error = gr.Textbox(
-                                    label="Status",
+                                    label="[ SYSTEM STATUS ]",
                                     interactive=False,
                                     visible=False,
                                 )
@@ -397,39 +611,39 @@ def build_ui() -> gr.Blocks:
                         with gr.Row():
                             with gr.Column():
                                 paste_input = gr.Textbox(
-                                    label="Paste a riddle card",
+                                    label="[ INPUT: PASTE RIDDLE CARD ]",
                                     placeholder="Paste the shared riddle here...",
                                     lines=10,
                                 )
-                                parse_btn = gr.Button("Parse Riddle")
+                                parse_btn = gr.Button("> PARSE RIDDLE")
 
                         with gr.Row(visible=False) as solve_output_row:
                             with gr.Column():
                                 riddle_display = gr.Textbox(
-                                    label="Riddle",
+                                    label="[ DECIPHERING: RIDDLE ]",
                                     lines=5,
                                     interactive=False,
                                 )
                                 solve_options = gr.Radio(
-                                    label="Choose your answer",
+                                    label="[ SELECT ANSWER ]",
                                     choices=[],
                                     interactive=True,
                                 )
                                 solve_feedback = gr.Textbox(
-                                    label="Result",
+                                    label="[ DECRYPTION RESULT ]",
                                     interactive=False,
                                 )
                                 solve_reveal = gr.Textbox(
-                                    label="Reveal",
+                                    label="[ REVEALED ANSWER DATA ]",
                                     interactive=False,
                                 )
                                 solve_state = gr.Textbox(visible=False)
                                 solve_attempts = gr.Textbox(
-                                    label="Attempts",
+                                    label="[ ATTACK ATTEMPTS ]",
                                     interactive=False,
                                     visible=False,
                                 )
-                                next_btn = gr.Button("Decrypt another?")
+                                next_btn = gr.Button("> DECRYPT ANOTHER?")
 
                         def on_parse(card: str):
                             riddle, opts_json, err, state = parse_riddle_card(card)
@@ -490,63 +704,63 @@ def build_ui() -> gr.Blocks:
                     with gr.Tab("Challenge"):
                         with gr.Row():
                             with gr.Column():
-                                gr.Markdown("## Challenge Mode")
-                                gr.Markdown("Solve as many riddles as you can before time runs out.")
+                                gr.Markdown("## > CHALLENGE PROTOCOL")
+                                gr.Markdown("Execute decryption sequences. Complete as many nodes as possible before terminal lockout.")
                                 theme_filter = gr.Dropdown(
                                     choices=[("All", "All")]
                                     + [(label, key) for key, label in THEME_LABELS.items() if key != "surprise"],
                                     value="All",
-                                    label="Theme Filter",
+                                    label="[ PARAM: THEME FILTER ]",
                                 )
-                                start_btn = gr.Button("Start Game")
+                                start_btn = gr.Button("> START GAME")
 
                         with gr.Row(visible=False) as game_row:
                             with gr.Column():
                                 timer_display = gr.Textbox(
-                                    label="Time Remaining",
+                                    label="[ TIMER: TIME REMAINING ]",
                                     value="10:00",
                                     interactive=False,
                                     elem_id="timer-display",
                                 )
                                 score_display = gr.Textbox(
-                                    label="Score",
+                                    label="[ ACCOUNT: SCORE ]",
                                     value="0",
                                     interactive=False,
                                 )
                                 streak_display = gr.Textbox(
-                                    label="Streak",
+                                    label="[ STATUS: STREAK ]",
                                     value="0",
                                     interactive=False,
                                 )
                                 challenge_riddle = gr.Textbox(
-                                    label="Riddle",
+                                    label="[ ACTIVE RIDDLE ]",
                                     lines=5,
                                     interactive=False,
                                 )
                                 challenge_options = gr.Radio(
-                                    label="Choose",
+                                    label="[ CHOOSE SOLUTION ]",
                                     choices=[],
                                     interactive=True,
                                 )
                                 challenge_feedback = gr.Textbox(
-                                    label="Feedback",
+                                    label="[ COMMAND FEEDBACK ]",
                                     interactive=False,
                                 )
                                 challenge_correct = gr.Textbox(
-                                    label="Correct Answer",
+                                    label="[ REVEALED SOLUTION ]",
                                     interactive=False,
                                     visible=False,
                                 )
-                                next_challenge_btn = gr.Button("Next Riddle")
-                                end_game_btn = gr.Button("End Game")
+                                next_challenge_btn = gr.Button("> NEXT RIDDLE")
+                                end_game_btn = gr.Button("> END GAME")
 
                         with gr.Row(visible=False) as game_over_row:
                             with gr.Column():
                                 final_score = gr.Textbox(
-                                    label="Final Score",
+                                    label="[ SUMMARY: FINAL SCORE ]",
                                     interactive=False,
                                 )
-                                new_game_btn = gr.Button("New Game")
+                                new_game_btn = gr.Button("> NEW GAME")
 
                         # Game state is stored in a simple hidden textbox for now
                         game_state = gr.Textbox(visible=False)
@@ -758,24 +972,24 @@ def build_ui() -> gr.Blocks:
                     # ---------------- About ----------------
                     with gr.Tab("About"):
                         gr.Markdown("""
-                        ## Alien Obfuscator
+                        ## > SYSTEM SPECIFICATION: ALIEN OBFUSCATOR v1.0
+                        
+                        ROBCO INDUSTRIES DEFENSE PROTOCOL (SECURE PORT)
 
-                        Built for the **Hugging Face Build Small Hackathon**.
+                        ### OPERATION DIRECTIVES
+                        1. **[ ENCRYPT ]** — Input plaintext message and select theme cipher.
+                           The cryptographic engine will construct a human-resolvable riddle.
+                        2. **[ SOLVE ]** — Paste target riddle card and process decryption.
+                        3. **[ CHALLENGE ]** — Race against the system timer to solve multiple nodes.
 
-                        ### How to Play
-                        1. **Encrypt** — Type a secret message and pick a theme.
-                           The AI will generate a riddle that only humans can solve.
-                        2. **Solve** — Paste a friend's riddle and guess the answer.
-                        3. **Challenge** — Race against the clock to solve as many as you can.
+                        ### HARDWARE ARCHITECTURE
+                        - User Interface: Gradio Monospace TUI Terminal
+                        - Decryption Engine: LLM-powered multi-modal cipher generation
+                        - Local Database: Curated public-domain text corpus
 
-                        ### Technology
-                        - Gradio UI
-                        - LLM-powered riddle generation
-                        - Curated public-domain corpus
-
-                        ### Parameter Budget
-                        - Primary LLM: up to 31B parameters
-                        - Total: ≤ 32B
+                        ### RESOURCE BUDGET
+                        - Primary Core: up to 31 Billion parameters
+                        - System Allocation: ≤ 32 Billion parameters total
                         """)
 
     return demo
