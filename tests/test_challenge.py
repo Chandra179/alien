@@ -52,7 +52,7 @@ def test_challenge_handlers() -> None:
 
     # 1. Test on_challenge_answer with a string for current_time_left
     # selected option is 'A', which is correct (index 0)
-    fb, reveal, next_state, update = on_challenge_answer_fn("A) Option A", state_str, "115")
+    fb, reveal, next_state, update, radio_update = on_challenge_answer_fn("A) Option A", state_str, "115")
 
     assert "Correct!" in fb
     assert reveal == ""
@@ -60,18 +60,21 @@ def test_challenge_handlers() -> None:
     assert st["time_left"] == 115
     assert st["streak"] == 3
     assert st["score"] > 10
+    assert radio_update.get("interactive") is False
 
     # 2. Test on_challenge_answer with integer current_time_left
-    fb_int, reveal_int, next_state_int, _ = on_challenge_answer_fn("B) Option B", state_str, 115)
+    fb_int, reveal_int, next_state_int, _, radio_update_int = on_challenge_answer_fn("B) Option B", state_str, 115)
     assert "Wrong!" in fb_int
     st_int = json.loads(next_state_int)
     assert st_int["time_left"] == 115
     assert st_int["streak"] == 0
+    assert radio_update_int.get("interactive") is False
 
     # 3. Test on_next_challenge with string current_time_left
     riddle, opt_upd, fb_nc, rev_nc, state_nc = on_next_challenge_fn(state_str, "100")
     assert fb_nc == ""
     assert rev_nc == ""
+    assert opt_upd.get("interactive") is True
     st_nc = json.loads(state_nc)
     assert st_nc["time_left"] == 100
     assert st_nc["riddle_start_time"] == 100

@@ -802,6 +802,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 challenge_options: gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
                                     value=None,
+                                    interactive=True,
                                 ),
                                 challenge_feedback: "",
                                 challenge_correct: gr.update(visible=False),
@@ -875,7 +876,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         def on_challenge_answer(
                             selected: str, state: str, current_time_left: Union[str, int]
-                        ) -> Tuple[str, str, str, Any]:
+                        ) -> Tuple[str, str, str, Any, Any]:
                             """Handle the submission of a challenge answer and update game state.
 
                             This function takes the selected answer, current JSON-encoded state,
@@ -894,12 +895,13 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                             Returns
                             -------
-                            Tuple[str, str, str, Any]
+                            Tuple[str, str, str, Any, Any]
                                 A tuple containing:
                                 - feedback (str): Response message regarding correctness and points.
                                 - reveal (str): Correct answer representation if incorrect, else empty string.
                                 - updated_state (str): Updated JSON-serialized game state.
                                 - visibility_update (Any): Gradio update dict for solution visibility.
+                                - interactive_update (Any): Gradio update dict to disable challenge options.
                             """
                             try:
                                 current_time_left_int = int(current_time_left)
@@ -907,7 +909,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 current_time_left_int = 0
 
                             if not selected or not state:
-                                return "", "", state, gr.update(visible=False)
+                                return "", "", state, gr.update(visible=False), gr.update()
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
@@ -932,12 +934,12 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 st["streak"] = 0
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
-                            return fb, reveal, json.dumps(st), gr.update(visible=True)
+                            return fb, reveal, json.dumps(st), gr.update(visible=True), gr.update(interactive=False)
 
                         challenge_options.change(
                             on_challenge_answer,
                             inputs=[challenge_options, game_state, answer_time_left],
-                            outputs=[challenge_feedback, challenge_correct, game_state, challenge_correct],
+                            outputs=[challenge_feedback, challenge_correct, game_state, challenge_correct, challenge_options],
                             js="""(selected, state, _) => {
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
@@ -992,6 +994,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
                                     value=None,
+                                    interactive=True,
                                 ),
                                 "",
                                 "",
