@@ -8,6 +8,7 @@ game engine.
 import json
 import os
 import random
+from typing import Any, Tuple, Union
 
 import gradio as gr
 from dotenv import load_dotenv
@@ -425,7 +426,12 @@ def parse_riddle_card(card_text: str) -> tuple[str, str, str, str]:
             or line.startswith("E) ")
         ):
             options.append(line[3:].strip())
-        elif line and not line.startswith("━") and not line.startswith("Alien Obfuscator") and not line.startswith("Can you"):
+        elif (
+            line
+            and not line.startswith("━")
+            and not line.startswith("Alien Obfuscator")
+            and not line.startswith("Can you")
+        ):
             riddle_lines.append(line)
 
     if len(options) != NUM_OPTIONS:
@@ -705,7 +711,9 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         with gr.Row():
                             with gr.Column():
                                 gr.Markdown("## > CHALLENGE PROTOCOL")
-                                gr.Markdown("Execute decryption sequences. Complete as many nodes as possible before terminal lockout.")
+                                gr.Markdown(
+                                    "Execute decryption sequences. Complete as many nodes as possible before terminal lockout."
+                                )
                                 theme_filter = gr.Dropdown(
                                     choices=[("All", "All")]
                                     + [(label, key) for key, label in THEME_LABELS.items() if key != "surprise"],
@@ -866,20 +874,50 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         )
 
                         def on_challenge_answer(
-                            selected: str, state: str, current_time_left: int
-                        ) -> tuple:
+                            selected: str, state: str, current_time_left: Union[str, int]
+                        ) -> Tuple[str, str, str, Any]:
+                            """Handle the submission of a challenge answer and update game state.
+
+                            This function takes the selected answer, current JSON-encoded state,
+                            and the remaining time. It parses the selected option, verifies it against
+                            the correct option, calculates base points, streak bonuses, and speed bonuses,
+                            and updates the state object before returning the feedback and updated state.
+
+                            Parameters
+                            ----------
+                            selected : str
+                                The option selected by the user (e.g., 'A) ...').
+                            state : str
+                                JSON-serialized string representing the current game state.
+                            current_time_left : Union[str, int]
+                                The time remaining in the game at the moment of submission.
+
+                            Returns
+                            -------
+                            Tuple[str, str, str, Any]
+                                A tuple containing:
+                                - feedback (str): Response message regarding correctness and points.
+                                - reveal (str): Correct answer representation if incorrect, else empty string.
+                                - updated_state (str): Updated JSON-serialized game state.
+                                - visibility_update (Any): Gradio update dict for solution visibility.
+                            """
+                            try:
+                                current_time_left_int = int(current_time_left)
+                            except (ValueError, TypeError):
+                                current_time_left_int = 0
+
                             if not selected or not state:
                                 return "", "", state, gr.update(visible=False)
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
-                            st["time_left"] = current_time_left
+                            st["time_left"] = current_time_left_int
                             if idx == correct_idx:
                                 points = POINTS_PER_CORRECT
                                 st["streak"] += 1
                                 streak_bonus = st["streak"] * STREAK_BONUS_POINTS
                                 speed_bonus = 0
-                                elapsed = st.get("riddle_start_time", current_time_left) - current_time_left
+                                elapsed = st.get("riddle_start_time", current_time_left_int) - current_time_left_int
                                 if elapsed <= SPEED_BONUS_SECONDS:
                                     speed_bonus = SPEED_BONUS_POINTS
                                 total_points = points + streak_bonus + speed_bonus
@@ -908,17 +946,47 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             }""",
                         )
 
-                        def on_next_challenge(state: str, current_time_left: int) -> tuple:
+                        def on_next_challenge(
+                            state: str, current_time_left: Union[str, int]
+                        ) -> Tuple[str, Any, Any, str, str]:
+                            """Generate the next riddle challenge and update game state.
+
+                            This function parses the current state, generates a new challenge riddle
+                            for the current theme, resets/records the starting time for this riddle,
+                            and returns the updated options and state.
+
+                            Parameters
+                            ----------
+                            state : str
+                                JSON-serialized string representing the current game state.
+                            current_time_left : Union[str, int]
+                                The time remaining in the game.
+
+                            Returns
+                            -------
+                            Tuple[str, Any, Any, str, str]
+                                A tuple containing:
+                                - riddle (str): The new riddle question.
+                                - options_update (Any): Gradio update containing new answer options.
+                                - feedback (Any): Cleared feedback message or updated component.
+                                - reveal (str): Cleared correct answer reveal message.
+                                - updated_state (str): Updated JSON-serialized game state.
+                            """
+                            try:
+                                current_time_left_int = int(current_time_left)
+                            except (ValueError, TypeError):
+                                current_time_left_int = 0
+
                             if not state:
                                 return "", "", [], "", state
                             st = json.loads(state)
                             if not st.get("game_active", False):
                                 return "", "", [], "", state
-                            st["time_left"] = current_time_left
+                            st["time_left"] = current_time_left_int
                             riddle, opts, correct = generate_challenge_riddle(st["theme"])
                             options = json.loads(opts)
                             st["correct_index"] = int(correct)
-                            st["riddle_start_time"] = current_time_left
+                            st["riddle_start_time"] = current_time_left_int
                             return (
                                 riddle,
                                 gr.update(

@@ -310,8 +310,7 @@ class OpenAICompatibleBackend(LLMBackend):
         if not key:
             logger.error("%s API key not found in environment var %s", self._provider_name, self._key_env_var)
             raise RuntimeError(
-                f"{self._provider_name} API key not provided and "
-                f"{self._key_env_var} not found in environment."
+                f"{self._provider_name} API key not provided and {self._key_env_var} not found in environment."
             )
 
         headers = {
@@ -328,12 +327,8 @@ class OpenAICompatibleBackend(LLMBackend):
 
         response = requests.post(self._api_url, headers=headers, json=payload, timeout=120)
         if response.status_code != 200:
-            logger.error(
-                "%s API error %d: %s", self._provider_name, response.status_code, response.text
-            )
-            raise RuntimeError(
-                f"{self._provider_name} API error {response.status_code}: {response.text}"
-            )
+            logger.error("%s API error %d: %s", self._provider_name, response.status_code, response.text)
+            raise RuntimeError(f"{self._provider_name} API error {response.status_code}: {response.text}")
 
         data = response.json()
         choices = data.get("choices", [])
@@ -512,9 +507,7 @@ class RiddleGenerator:
             len(raw),
             text[:400],
         )
-        raise ValueError(
-            "Could not extract valid JSON from LLM response."
-        )
+        raise ValueError("Could not extract valid JSON from LLM response.")
 
     def generate(self, plaintext: str, theme: str) -> dict[str, Any]:
         """Generate a riddle + MCQ options for the given plaintext and theme.
