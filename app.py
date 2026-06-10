@@ -601,13 +601,12 @@ class NextChallengeResult(NamedTuple):
     updated_state: str
 
 
-def on_color_change(color: str) -> str:
+def on_color_change(color: str) -> None:
     """Handle TUI terminal color changes.
 
     This function is triggered when the user selects a different color option
-    from the dropdown menu. It simply returns the selected color, while the
-    associated JavaScript handler dynamically modifies the CSS custom properties
-    to apply the new styling theme.
+    from the dropdown menu. It accepts the selected color name but returns
+    None, as styling modifications are applied client-side via JavaScript.
 
     Parameters
     ----------
@@ -616,10 +615,9 @@ def on_color_change(color: str) -> str:
 
     Returns
     -------
-    str
-        The selected color name.
+    None
     """
-    return color
+    pass
 
 
 # ---------------------------------------------------------------------------

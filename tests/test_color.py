@@ -10,10 +10,10 @@ from app import build_ui, on_color_change
 
 
 def test_on_color_change() -> None:
-    """Test that the on_color_change function returns the correct color name.
+    """Test that the on_color_change function returns None.
 
     This function verifies that the backend event handler for the color dropdown
-    returns the same color string passed to it.
+    returns None, as styling is handled client-side via JavaScript.
 
     Parameters
     ----------
@@ -24,7 +24,7 @@ def test_on_color_change() -> None:
     None
     """
     for color in ["Green", "Blue", "Red", "Light gray"]:
-        assert on_color_change(color) == color
+        assert on_color_change(color) is None
 
 
 def test_color_dropdown_in_ui() -> None:
