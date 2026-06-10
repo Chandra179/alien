@@ -12,9 +12,19 @@ import random
 from abc import ABC, abstractmethod
 from typing import Any
 
-from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, MAX_RETRIES, NUM_OPTIONS, LLM_MAX_TOKENS
-from alien_obfuscator.corpus_manager import CorpusManager
-
+from alien_obfuscator.config import (
+    HF_API_TIMEOUT,
+    LLM_MAX_TOKENS,
+    LLM_TEMPERATURE,
+    MAX_PLAINTEXT_LENGTH,
+    MAX_RETRIES,
+    MOCK_DISTRACTORS,
+    NUM_OPTIONS,
+    OPENCODE_GO_TIMEOUT,
+    OPENCODE_GO_URL,
+    OPENROUTER_TIMEOUT,
+    OPENROUTER_URL,
+)
 logger = logging.getLogger(__name__)
 
 
@@ -167,12 +177,7 @@ class MockBackend(LLMBackend):
                 plaintext = line.split("ANSWER is:", 1)[-1].strip()
                 break
 
-        distractors = [
-            "a wrong answer",
-            "another wrong answer",
-            "yet another wrong answer",
-            "the last wrong answer",
-        ]
+        distractors = list(MOCK_DISTRACTORS)
         return json.dumps(
             {
                 "riddle": (
@@ -234,10 +239,14 @@ class HuggingFaceBackend(LLMBackend):
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         payload = {
             "inputs": prompt,
-            "parameters": {"max_new_tokens": LLM_MAX_TOKENS, "temperature": 0.8, "return_full_text": False},
+            "parameters": {
+                "max_new_tokens": LLM_MAX_TOKENS,
+                "temperature": LLM_TEMPERATURE,
+                "return_full_text": False,
+            },
         }
 
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response = requests.post(url, headers=headers, json=payload, timeout=HF_API_TIMEOUT)
         if response.status_code != 200:
             logger.error("HF API error %d: %s", response.status_code, response.text)
             raise RuntimeError(f"HF API error {response.status_code}: {response.text}")
@@ -276,6 +285,7 @@ class OpenAICompatibleBackend(LLMBackend):
         key_env_var: str = "",
         provider_name: str = "API",
         extra_headers: dict | None = None,
+        timeout: int = 120,
     ) -> None:
         self.model_id = model_id
         self.api_key = api_key
@@ -283,6 +293,7 @@ class OpenAICompatibleBackend(LLMBackend):
         self._key_env_var = key_env_var
         self._provider_name = provider_name
         self._extra_headers = extra_headers or {}
+        self._timeout = timeout
 
     def generate(self, prompt: str) -> str:
         """Call the chat completions API and return the generated text.
@@ -322,10 +333,10 @@ class OpenAICompatibleBackend(LLMBackend):
             "model": self.model_id,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": LLM_MAX_TOKENS,
-            "temperature": 0.8,
+            "temperature": LLM_TEMPERATURE,
         }
 
-        response = requests.post(self._api_url, headers=headers, json=payload, timeout=120)
+        response = requests.post(self._api_url, headers=headers, json=payload, timeout=self._timeout)
         if response.status_code != 200:
             logger.error("%s API error %d: %s", self._provider_name, response.status_code, response.text)
             raise RuntimeError(f"{self._provider_name} API error {response.status_code}: {response.text}")
@@ -364,13 +375,14 @@ class OpenRouterBackend(OpenAICompatibleBackend):
         super().__init__(
             model_id=model_id,
             api_key=api_key,
-            api_url="https://openrouter.ai/api/v1/chat/completions",
+            api_url=OPENROUTER_URL,
             key_env_var="OPENROUTER_API_KEY",
             provider_name="OpenRouter",
             extra_headers={
                 "HTTP-Referer": "https://github.com/koala/alien-obfuscator",
                 "X-Title": "Alien Obfuscator",
             },
+            timeout=OPENROUTER_TIMEOUT,
         )
 
 
@@ -381,9 +393,10 @@ class OpenCodeGoBackend(OpenAICompatibleBackend):
         super().__init__(
             model_id=model_id,
             api_key=api_key,
-            api_url="https://opencode.ai/zen/go/v1/chat/completions",
+            api_url=OPENCODE_GO_URL,
             key_env_var="OPENCODE_GO_API_KEY",
             provider_name="OpenCode Go",
+            timeout=OPENCODE_GO_TIMEOUT,
         )
 
 
@@ -393,12 +406,13 @@ class OpenCodeGoBackend(OpenAICompatibleBackend):
 class RiddleGenerator:
     """Orchestrate prompt building, LLM inference, and response validation.
 
+    The LLM draws on its own training knowledge of literary and mythological
+    themes — no static corpus is needed.
+
     Parameters
     ----------
     backend : LLMBackend
         The concrete LLM implementation to use.
-    corpus_manager : CorpusManager
-        Source of random corpus excerpts for prompt enrichment.
     max_retries : int, default 2
         How many times to retry on JSON parse / validation errors.
     """
@@ -406,15 +420,17 @@ class RiddleGenerator:
     def __init__(
         self,
         backend: LLMBackend,
-        corpus_manager: CorpusManager,
         max_retries: int = MAX_RETRIES,
     ) -> None:
         self._backend = backend
-        self._corpus = corpus_manager
         self._max_retries = max_retries
 
-    def _build_prompt(self, plaintext: str, theme: str, excerpt: str) -> str:
+    def _build_prompt(self, plaintext: str, theme: str) -> str:
         """Construct the full prompt for the LLM.
+
+        No static corpus excerpt is injected — the LLM draws on its
+        training knowledge to produce authentic thematically-grounded
+        riddles.
 
         Parameters
         ----------
@@ -422,8 +438,6 @@ class RiddleGenerator:
             The secret message to encode.
         theme : str
             Theme key (e.g. ``"greek_myth"``).
-        excerpt : str
-            A corpus excerpt to inject as creative inspiration.
 
         Returns
         -------
@@ -440,7 +454,6 @@ class RiddleGenerator:
             num_options=NUM_OPTIONS,
             num_distractors=NUM_OPTIONS - 1,
         )
-        prompt += f"\n\nSource text inspiration:\n{excerpt}\n"
         prompt += STRICT_JSON_PROMPT
         return prompt
 
@@ -472,8 +485,14 @@ class RiddleGenerator:
             logger.error("LLM returned empty response")
             raise ValueError("LLM returned empty response")
         if text.startswith("```"):
-            text = text.removeprefix("```json").removeprefix("```")
-            text = text.removesuffix("```").strip()
+            first_newline = text.find("\n")
+            if first_newline >= 0:
+                text = text[first_newline + 1:]
+            else:
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
 
         # Try full text first
         if text.startswith("{"):
@@ -483,16 +502,21 @@ class RiddleGenerator:
             except (json.JSONDecodeError, ValueError):
                 pass
 
-        # Fallback: extract the first JSON object from the text
-        start = text.find("{")
-        if start >= 0:
+        # Fallback: scan for the first valid JSON object in the text
+        pos = 0
+        while True:
+            start = text.find("{", pos)
+            if start < 0:
+                break
             depth = 0
+            matched = False
             for end in range(start, len(text)):
                 if text[end] == "{":
                     depth += 1
                 elif text[end] == "}":
                     depth -= 1
                     if depth == 0:
+                        matched = True
                         candidate = text[start : end + 1]
                         try:
                             data = json.loads(candidate)
@@ -500,7 +524,11 @@ class RiddleGenerator:
                             return _validate_riddle_json(data)
                         except (json.JSONDecodeError, ValueError):
                             pass
-                        break  # outermost brace pair didn't parse; stop
+                        break
+            if not matched:
+                pos = start + 1
+            else:
+                pos = end + 1
 
         logger.warning(
             "Failed to parse LLM output as JSON: Raw text (len=%d): %.400s",
@@ -541,12 +569,11 @@ class RiddleGenerator:
         if len(plaintext) > MAX_PLAINTEXT_LENGTH:
             raise ValueError(f"Plaintext exceeds {MAX_PLAINTEXT_LENGTH} characters.")
 
-        excerpt = self._corpus.get_excerpt(theme, count=1)[0]
         last_error: Exception | None = None
 
         for _attempt in range(self._max_retries + 1):
             try:
-                prompt = self._build_prompt(plaintext, theme, excerpt)
+                prompt = self._build_prompt(plaintext, theme)
                 raw = self._backend.generate(prompt)
                 data = self._parse_response(raw)
                 break
