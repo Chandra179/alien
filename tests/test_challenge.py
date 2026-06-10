@@ -68,9 +68,15 @@ def test_challenge_handlers() -> None:
     assert res_ans.interactive_update.get("interactive") is False
 
     # Unpack to verify tuple unpacking compatibility
-    fb, reveal, next_state, update, radio_update = res_ans
+    fb, reveal, next_state, update, radio_update, score_upd, streak_upd = res_ans
     assert fb == res_ans.feedback
     assert reveal == res_ans.reveal
+
+    # Verify that calling on_game_over with the updated state (after correct answer)
+    # returns the updated score.
+    res_go_correct = on_game_over_fn(res_ans.updated_state)
+    assert isinstance(res_go_correct, GameOverResult)
+    assert int(res_go_correct.final_score) == st["score"]
 
     # 2. Test on_challenge_answer with integer current_time_left
     res_ans_wrong = on_challenge_answer_fn("B) Option B", state_str, 115)

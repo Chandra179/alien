@@ -14,14 +14,10 @@ import gradio as gr
 from dotenv import load_dotenv
 
 from alien_obfuscator.config import (
-    APP_TITLE,
     CHALLENGE_PHRASES,
     DEFAULT_BACKEND,
     DEFAULT_GAME_DURATION_MINUTES,
     HF_DEFAULT_MODEL,
-    LAUNCH_SERVER_NAME,
-    LAUNCH_SERVER_PORT,
-    LAUNCH_SHARE,
     MAX_PLAINTEXT_LENGTH,
     NUM_OPTIONS,
     OPENCODE_GO_DEFAULT_MODEL,
@@ -118,6 +114,20 @@ TIMER_HTML = """
 FALLOUT_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
+:root {
+    --terminal-color: #33ff33;
+    --terminal-color-glow: rgba(51, 255, 51, 0.8);
+    --terminal-color-glow-low: rgba(51, 255, 51, 0.5);
+    --terminal-color-glow-container: rgba(51, 255, 51, 0.25);
+    --terminal-color-glow-container-outer: rgba(51, 255, 51, 0.15);
+    --terminal-bg-glow: #0d1f0d;
+    --terminal-bg: #030703;
+    --terminal-placeholder: #1a5c1a;
+    --terminal-disabled-bg: #010301;
+    --terminal-disabled-color: #114411;
+    --terminal-border-dim: #22aa22;
+}
+
 /* Apply VT323 retro font and scanline styles to all components */
 body, .gradio-container, .gradio-container * {
     font-family: 'VT323', 'Courier New', Courier, monospace !important;
@@ -128,8 +138,8 @@ body, .gradio-container, .gradio-container * {
 }
 
 body {
-    background-color: #030703 !important;
-    color: #33ff33 !important;
+    background-color: var(--terminal-bg) !important;
+    color: var(--terminal-color) !important;
     margin: 0;
     padding: 0;
 }
@@ -151,9 +161,9 @@ body::before {
 
 /* Container framing with classic terminal border and CRT glow */
 .gradio-container {
-    background-color: #030703 !important;
-    border: 3px solid #33ff33 !important;
-    box-shadow: 0 0 25px rgba(51, 255, 51, 0.25) inset, 0 0 15px rgba(51, 255, 51, 0.15) !important;
+    background-color: var(--terminal-bg) !important;
+    border: 3px solid var(--terminal-color) !important;
+    box-shadow: 0 0 25px var(--terminal-color-glow-container) inset, 0 0 15px var(--terminal-color-glow-container-outer) !important;
     max-width: 950px !important;
     margin: 40px auto !important;
     padding: 25px !important;
@@ -161,8 +171,8 @@ body::before {
 
 /* Headers with glow effects */
 h1, h2, h3, h4, h5, h6 {
-    color: #33ff33 !important;
-    text-shadow: 0 0 8px rgba(51, 255, 51, 0.8) !important;
+    color: var(--terminal-color) !important;
+    text-shadow: 0 0 8px var(--terminal-color-glow) !important;
     font-weight: bold !important;
     text-transform: uppercase !important;
 }
@@ -172,14 +182,14 @@ h3 { font-size: 1.6rem !important; }
 
 /* Plain text and label adjustments */
 p, span, li {
-    color: #33ff33 !important;
-    text-shadow: 0 0 3px rgba(51, 255, 51, 0.5) !important;
+    color: var(--terminal-color) !important;
+    text-shadow: 0 0 3px var(--terminal-color-glow-low) !important;
 }
 
 /* Flat solid terminal panels for all Gradio blocks */
 .block, .form, .panel, .gr-box, .gr-panel, .gr-block {
     background-color: #000000 !important;
-    border: 1px solid #33ff33 !important;
+    border: 1px solid var(--terminal-color) !important;
     padding: 15px !important;
     margin-bottom: 12px !important;
 }
@@ -187,90 +197,90 @@ p, span, li {
 /* Text Inputs, textareas, and select menus */
 input, textarea, select, .gr-input, .gr-textarea {
     background-color: #000000 !important;
-    color: #33ff33 !important;
-    border: 1px solid #33ff33 !important;
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
     font-family: 'VT323', monospace !important;
     padding: 8px !important;
-    text-shadow: 0 0 3px rgba(51, 255, 51, 0.5) !important;
+    text-shadow: 0 0 3px var(--terminal-color-glow-low) !important;
 }
 input::placeholder, textarea::placeholder {
-    color: #1a5c1a !important;
+    color: var(--terminal-placeholder) !important;
     text-shadow: none !important;
 }
 input:focus, textarea:focus, select:focus {
-    border-color: #33ff33 !important;
-    box-shadow: 0 0 10px rgba(51, 255, 51, 0.7) !important;
+    border-color: var(--terminal-color) !important;
+    box-shadow: 0 0 10px var(--terminal-color-glow) !important;
     outline: none !important;
 }
 
 /* Dropdown menus & wrappers */
 .dropdown-menu, .options, .select-wrap, .dropdown, select {
     background-color: #000000 !important;
-    color: #33ff33 !important;
-    border: 1px solid #33ff33 !important;
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
 }
 
 /* Retro buttons with glowing hover state */
 button, .gr-button {
-    background-color: #0d1f0d !important;
-    color: #33ff33 !important;
-    border: 1px solid #33ff33 !important;
+    background-color: var(--terminal-bg-glow) !important;
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
     text-transform: uppercase !important;
     font-weight: bold !important;
     font-family: 'VT323', monospace !important;
     padding: 8px 16px !important;
     cursor: pointer !important;
     transition: all 0.15s ease-in-out !important;
-    text-shadow: 0 0 3px rgba(51, 255, 51, 0.5) !important;
+    text-shadow: 0 0 3px var(--terminal-color-glow-low) !important;
 }
 button:hover, .gr-button:hover {
-    background-color: #33ff33 !important;
+    background-color: var(--terminal-color) !important;
     color: #000000 !important;
-    box-shadow: 0 0 12px rgba(51, 255, 51, 0.8) !important;
+    box-shadow: 0 0 12px var(--terminal-color-glow) !important;
     text-shadow: none !important;
 }
 button:disabled, .gr-button:disabled {
-    background-color: #010301 !important;
-    color: #114411 !important;
-    border-color: #114411 !important;
+    background-color: var(--terminal-disabled-bg) !important;
+    color: var(--terminal-disabled-color) !important;
+    border-color: var(--terminal-disabled-color) !important;
     cursor: not-allowed !important;
     text-shadow: none !important;
 }
 
 /* Tab bar customization */
 .tab-nav, [role="tablist"], .tabs {
-    border-bottom: 2px solid #33ff33 !important;
+    border-bottom: 2px solid var(--terminal-color) !important;
     background-color: #000000 !important;
     margin-bottom: 15px !important;
 }
 .tab-nav button, [role="tab"], .tabs button {
     background-color: transparent !important;
-    color: #22aa22 !important;
+    color: var(--terminal-border-dim) !important;
     border: none !important;
     font-size: 1.5rem !important;
     padding: 10px 18px !important;
 }
 .tab-nav button:hover, [role="tab"]:hover, .tabs button:hover {
-    color: #33ff33 !important;
+    color: var(--terminal-color) !important;
 }
 .tab-nav button.selected, [aria-selected="true"], .tabs button.selected, .tabitem.selected {
-    color: #33ff33 !important;
-    border: 1px solid #33ff33 !important;
-    border-bottom: 1px solid #030703 !important;
-    background-color: #0d1f0d !important;
-    text-shadow: 0 0 6px rgba(51, 255, 51, 0.8) !important;
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
+    border-bottom: 1px solid var(--terminal-bg) !important;
+    background-color: var(--terminal-bg-glow) !important;
+    text-shadow: 0 0 6px var(--terminal-color-glow) !important;
 }
 
 /* Header style specifically for terminal branding */
 .terminal-header {
-    border-bottom: 2px dashed #33ff33 !important;
+    border-bottom: 2px dashed var(--terminal-color) !important;
     margin-bottom: 20px !important;
     padding-bottom: 10px !important;
 }
 .terminal-header-text {
     font-family: 'VT323', monospace !important;
-    color: #33ff33 !important;
-    text-shadow: 0 0 5px rgba(51, 255, 51, 0.7) !important;
+    color: var(--terminal-color) !important;
+    text-shadow: 0 0 5px var(--terminal-color-glow) !important;
     line-height: 1.2 !important;
     white-space: pre;
 }
@@ -278,7 +288,7 @@ button:disabled, .gr-button:disabled {
 /* Text labels on panels and widgets */
 .block-label, .gr-block-label, label, label span {
     background-color: #000000 !important;
-    color: #33ff33 !important;
+    color: var(--terminal-color) !important;
     font-family: 'VT323', monospace !important;
     text-transform: uppercase !important;
     font-weight: bold !important;
@@ -286,25 +296,29 @@ button:disabled, .gr-button:disabled {
 
 /* Custom styles for checkboxes and radios */
 .gr-radio, input[type="radio"], input[type="checkbox"] {
-    accent-color: #33ff33 !important;
+    accent-color: var(--terminal-color) !important;
 }
 .gr-radio label, .radio-group label {
-    border: 1px solid #22aa22 !important;
-    color: #22aa22 !important;
+    border: 1px solid var(--terminal-border-dim) !important;
+    color: var(--terminal-border-dim) !important;
     background-color: #000000 !important;
 }
 .gr-radio label.selected, .radio-group label.selected {
-    border-color: #33ff33 !important;
-    color: #33ff33 !important;
-    background-color: #0d1f0d !important;
-    text-shadow: 0 0 4px rgba(51, 255, 51, 0.7) !important;
+    border-color: var(--terminal-color) !important;
+    color: var(--terminal-color) !important;
+    background-color: var(--terminal-bg-glow) !important;
+    text-shadow: 0 0 4px var(--terminal-color-glow-low) !important;
 }
 
 /* Inner elements for custom look */
 .copy-btn, button.svelte-custom {
-    background-color: #050a05 !important;
-    border: 1px solid #33ff33 !important;
-    color: #33ff33 !important;
+    background-color: var(--terminal-bg-glow) !important;
+    border: 1px solid var(--terminal-color) !important;
+    color: var(--terminal-color) !important;
+}
+
+#game-state-input, #answer-time-left {
+    display: none !important;
 }
 """
 
@@ -558,6 +572,10 @@ class ChallengeAnswerResult(NamedTuple):
         Gradio update dict for solution visibility.
     interactive_update : Any
         Gradio update dict to disable challenge options.
+    score_update : str
+        The updated score to display.
+    streak_update : str
+        The updated streak to display.
     """
 
     feedback: str
@@ -565,6 +583,8 @@ class ChallengeAnswerResult(NamedTuple):
     updated_state: str
     visibility_update: Any
     interactive_update: Any
+    score_update: str
+    streak_update: str
 
 
 class NextChallengeResult(NamedTuple):
@@ -589,6 +609,25 @@ class NextChallengeResult(NamedTuple):
     feedback: Any
     reveal: str
     updated_state: str
+
+
+def on_color_change(color: str) -> None:
+    """Handle TUI terminal color changes.
+
+    This function is triggered when the user selects a different color option
+    from the dropdown menu. It accepts the selected color name but returns
+    None, as styling modifications are applied client-side via JavaScript.
+
+    Parameters
+    ----------
+    color : str
+        The selected color name ("Green", "Blue", "Red", "Light gray").
+
+    Returns
+    -------
+    None
+    """
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -617,6 +656,70 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
         with gr.Row():
             with gr.Column(scale=3):
+                color_dropdown = gr.Dropdown(
+                    choices=["Green", "Blue", "Red", "Light gray"],
+                    value="Green",
+                    label="[ PARAM: TERMINAL COLOR ]",
+                    interactive=True,
+                )
+                color_dropdown.change(
+                    on_color_change,
+                    inputs=color_dropdown,
+                    outputs=None,
+                    js="""(color) => {
+                        const root = document.documentElement;
+                        if (color === "Green") {
+                            root.style.setProperty('--terminal-color', '#33ff33');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(51, 255, 51, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(51, 255, 51, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(51, 255, 51, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(51, 255, 51, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#0d1f0d');
+                            root.style.setProperty('--terminal-bg', '#030703');
+                            root.style.setProperty('--terminal-placeholder', '#1a5c1a');
+                            root.style.setProperty('--terminal-disabled-bg', '#010301');
+                            root.style.setProperty('--terminal-disabled-color', '#114411');
+                            root.style.setProperty('--terminal-border-dim', '#22aa22');
+                        } else if (color === "Blue") {
+                            root.style.setProperty('--terminal-color', '#3399ff');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(51, 153, 255, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(51, 153, 255, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(51, 153, 255, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(51, 153, 255, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#0a1c33');
+                            root.style.setProperty('--terminal-bg', '#02050a');
+                            root.style.setProperty('--terminal-placeholder', '#153e66');
+                            root.style.setProperty('--terminal-disabled-bg', '#000103');
+                            root.style.setProperty('--terminal-disabled-color', '#0f2d4a');
+                            root.style.setProperty('--terminal-border-dim', '#2277aa');
+                        } else if (color === "Red") {
+                            root.style.setProperty('--terminal-color', '#ff3333');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(255, 51, 51, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(255, 51, 51, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(255, 51, 51, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(255, 51, 51, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#2b0a0a');
+                            root.style.setProperty('--terminal-bg', '#0a0202');
+                            root.style.setProperty('--terminal-placeholder', '#661515');
+                            root.style.setProperty('--terminal-disabled-bg', '#030000');
+                            root.style.setProperty('--terminal-disabled-color', '#4a0f0f');
+                            root.style.setProperty('--terminal-border-dim', '#aa2222');
+                        } else if (color === "Light gray") {
+                            root.style.setProperty('--terminal-color', '#e0e0e0');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(224, 224, 224, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(224, 224, 224, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(224, 224, 224, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(224, 224, 224, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#242424');
+                            root.style.setProperty('--terminal-bg', '#0a0a0a');
+                            root.style.setProperty('--terminal-placeholder', '#5c5c5c');
+                            root.style.setProperty('--terminal-disabled-bg', '#030303');
+                            root.style.setProperty('--terminal-disabled-color', '#444444');
+                            root.style.setProperty('--terminal-border-dim', '#aaaaaa');
+                        }
+                        return color;
+                    }"""
+                )
                 with gr.Tabs():
                     # ---------------- Encrypt ----------------
                     with gr.Tab("Encrypt"):
@@ -835,8 +938,8 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 new_game_btn = gr.Button("> NEW GAME")
 
                         # Game state is stored in a simple hidden textbox for now
-                        game_state = gr.Textbox(visible=False)
-                        answer_time_left = gr.Textbox(visible=False)
+                        game_state = gr.Textbox(visible=True, elem_id="game-state-input")
+                        answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
 
                         with gr.Row(visible=False):
                             game_over_trigger = gr.Button(
@@ -965,7 +1068,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             -------
                             ChallengeAnswerResult
                                 Custom result object containing feedback, reveal message, updated game state,
-                                solution visibility update, and interaction states.
+                                solution visibility update, interaction states, and score/streak updates.
                             """
                             try:
                                 current_time_left_int = int(current_time_left)
@@ -973,7 +1076,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 current_time_left_int = 0
 
                             if not selected or not state:
-                                return ChallengeAnswerResult("", "", state, gr.update(visible=False), gr.update())
+                                return ChallengeAnswerResult("", "", state, gr.update(visible=False), gr.update(), "", "")
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
@@ -999,7 +1102,13 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
                             return ChallengeAnswerResult(
-                                fb, reveal, json.dumps(st), gr.update(visible=True), gr.update(interactive=False)
+                                fb,
+                                reveal,
+                                json.dumps(st),
+                                gr.update(visible=True),
+                                gr.update(interactive=False),
+                                str(st.get("score", 0)),
+                                str(st.get("streak", 0)),
                             )
 
                         challenge_options.change(
@@ -1011,6 +1120,8 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 game_state,
                                 challenge_correct,
                                 challenge_options,
+                                score_display,
+                                streak_display,
                             ],
                             js="""(selected, state, _) => {
                                 var remainingSec = window.gameEndTime
