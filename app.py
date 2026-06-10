@@ -316,6 +316,10 @@ button:disabled, .gr-button:disabled {
     border: 1px solid var(--terminal-color) !important;
     color: var(--terminal-color) !important;
 }
+
+#game-state-input, #answer-time-left {
+    display: none !important;
+}
 """
 
 GOOGLE_FONT_HTML = """
@@ -568,6 +572,10 @@ class ChallengeAnswerResult(NamedTuple):
         Gradio update dict for solution visibility.
     interactive_update : Any
         Gradio update dict to disable challenge options.
+    score_update : str
+        The updated score to display.
+    streak_update : str
+        The updated streak to display.
     """
 
     feedback: str
@@ -575,6 +583,8 @@ class ChallengeAnswerResult(NamedTuple):
     updated_state: str
     visibility_update: Any
     interactive_update: Any
+    score_update: str
+    streak_update: str
 
 
 class NextChallengeResult(NamedTuple):
@@ -928,8 +938,8 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 new_game_btn = gr.Button("> NEW GAME")
 
                         # Game state is stored in a simple hidden textbox for now
-                        game_state = gr.Textbox(visible=False)
-                        answer_time_left = gr.Textbox(visible=False)
+                        game_state = gr.Textbox(visible=True, elem_id="game-state-input")
+                        answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
 
                         with gr.Row(visible=False):
                             game_over_trigger = gr.Button(
@@ -1058,7 +1068,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             -------
                             ChallengeAnswerResult
                                 Custom result object containing feedback, reveal message, updated game state,
-                                solution visibility update, and interaction states.
+                                solution visibility update, interaction states, and score/streak updates.
                             """
                             try:
                                 current_time_left_int = int(current_time_left)
@@ -1066,7 +1076,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 current_time_left_int = 0
 
                             if not selected or not state:
-                                return ChallengeAnswerResult("", "", state, gr.update(visible=False), gr.update())
+                                return ChallengeAnswerResult("", "", state, gr.update(visible=False), gr.update(), "", "")
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
@@ -1092,7 +1102,13 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
                             return ChallengeAnswerResult(
-                                fb, reveal, json.dumps(st), gr.update(visible=True), gr.update(interactive=False)
+                                fb,
+                                reveal,
+                                json.dumps(st),
+                                gr.update(visible=True),
+                                gr.update(interactive=False),
+                                str(st.get("score", 0)),
+                                str(st.get("streak", 0)),
                             )
 
                         challenge_options.change(
@@ -1104,6 +1120,8 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 game_state,
                                 challenge_correct,
                                 challenge_options,
+                                score_display,
+                                streak_display,
                             ],
                             js="""(selected, state, _) => {
                                 var remainingSec = window.gameEndTime
