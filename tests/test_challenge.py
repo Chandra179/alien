@@ -113,7 +113,7 @@ def test_challenge_handlers() -> None:
     assert st_go["score"] == 10
 
     # Unpack to verify tuple unpacking compatibility
-    timer_display, state_json_val, game_row_val, game_over_row_val = res_go
+    timer_display, state_json_val, game_row_val, game_over_row_val, final_score_val = res_go
     assert timer_display == "00:00"
 
     # 5. Verify that both "Game Over" trigger and "End Game" buttons are wired to on_game_over

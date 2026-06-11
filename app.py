@@ -564,12 +564,15 @@ class GameOverResult(NamedTuple):
         Gradio update dict for the game row visibility.
     game_over_row : Any
         Gradio update dict for the game over row visibility.
+    final_score : Any
+        The final score component.
     """
 
     timer_display: str
     state_json: str
     game_row: Any
     game_over_row: Any
+    final_score: Any
 
 
 class ChallengeAnswerResult(NamedTuple):
@@ -955,7 +958,6 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         # State is bridged through localStorage; state_buffer holds temporary JSON
                         state_bridge = gr.Textbox(visible=False)
                         answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
-                        local_storage_score = gr.Textbox(visible=False)
 
                         with gr.Row(visible=False):
                             game_over_trigger = gr.Button(
@@ -1000,6 +1002,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                             This function takes the current JSON-encoded state, marks the game as inactive,
                             sets remaining time to zero, and prepares the UI transition to the game over screen.
+                            It also extracts the final score to be displayed.
 
                             Parameters
                             ----------
@@ -1009,19 +1012,21 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             Returns
                             -------
                             GameOverResult
-                                Custom result object containing timer display, game state, and UI visibility
+                                Custom result object containing timer display, game state, final score, and UI visibility
                                 updates.
                             """
                             if not state:
-                                return GameOverResult("00:00", "", gr.update(visible=False), gr.update(visible=True))
+                                return GameOverResult("00:00", "", gr.update(visible=False), gr.update(visible=True), "0")
                             st = json.loads(state)
                             st["game_active"] = False
                             st["time_left"] = 0
+                            final_score_value = str(st.get("score", 0))
                             return GameOverResult(
                                 "00:00",
                                 json.dumps(st),
                                 gr.update(visible=False),
                                 gr.update(visible=True),
+                                gr.update(value=final_score_value),
                             )
 
                         game_over_trigger.click(
@@ -1032,6 +1037,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 state_bridge,
                                 game_row,
                                 game_over_row,
+                                final_score,
                             ],
                             js="""() => {
                                 window.stopGameTimer();
@@ -1046,13 +1052,6 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                     window.writeGameState(JSON.parse(state_json));
                                 } catch (e) {}
                                 return state_json;
-                            }""",
-                        ).then(
-                            lambda score: score,
-                            inputs=local_storage_score,
-                            outputs=final_score,
-                            js="""(_) => {
-                                return localStorage.getItem("game_score") || "0";
                             }""",
                         )
 
@@ -1148,7 +1147,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             return ChallengeAnswerResult(
                                 fb,
                                 reveal,
-                                json.dumps(st),
+                                json.dumps(obj=st),
                                 gr.update(visible=True),
                                 gr.update(interactive=False),
                                 str(st.get("score", 0)),
@@ -1269,6 +1268,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 state_bridge,
                                 game_row,
                                 game_over_row,
+                                final_score,
                             ],
                             js="""() => {
                                 window.stopGameTimer();
@@ -1284,13 +1284,6 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 } catch (e) {}
                                 return state_json;
                             }""",
-                        ).then(
-                            lambda score: score,
-                            inputs=local_storage_score,
-                            outputs=final_score,
-                            js="""(_) => {
-                                return localStorage.getItem("game_score") || "0";
-                            }""",
                         )
 
                         new_game_btn.click(
@@ -1304,9 +1297,10 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                     # ---------------- About ----------------
                     with gr.Tab("About"):
-                        gr.Markdown("""
+                        gr.Markdown(
+                            """
                         ## > SYSTEM SPECIFICATION: ALIEN OBFUSCATOR v1.0
-                        
+
                         ROBCO INDUSTRIES DEFENSE PROTOCOL (SECURE PORT)
 
                         ### OPERATION DIRECTIVES
@@ -1323,9 +1317,10 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         ### RESOURCE BUDGET
                         - Primary Core: up to 31 Billion parameters
                         - System Allocation: ≤ 32 Billion parameters total
-                        """)
+                        """
+                        )
 
-    return demo
+        return demo
 
 
 if __name__ == "__main__":
