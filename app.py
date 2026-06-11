@@ -597,9 +597,8 @@ class ChallengeAnswerResult(NamedTuple):
     """
 
     feedback: str
-    reveal: str
+    correct_update: Any  # Combines both value and visibility properties
     updated_state: str
-    visibility_update: Any
     interactive_update: Any
     score_update: str
     streak_update: str
@@ -1089,28 +1088,6 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         def on_challenge_answer(
                             selected: Union[str, None], state: str, current_time_left: Union[str, int]
                         ) -> ChallengeAnswerResult:
-                            """Handle the submission of a challenge answer and update game state.
-
-                            This function takes the selected answer, current JSON-encoded state,
-                            and the remaining time. It parses the selected option, verifies it against
-                            the correct option, calculates base points, streak bonuses, and speed bonuses,
-                            and updates the state object before returning the feedback and updated state.
-
-                            Parameters
-                            ----------
-                            selected : str
-                                The option selected by the user (e.g., 'A) ...').
-                            state : str
-                                JSON-serialized string representing the current game state.
-                            current_time_left : Union[str, int]
-                                The time remaining in the game at the moment of submission.
-
-                            Returns
-                            -------
-                            ChallengeAnswerResult
-                                Custom result object containing feedback, reveal message, updated game state,
-                                solution visibility update, interaction states, and score/streak updates.
-                            """
                             try:
                                 current_time_left_int = int(current_time_left)
                             except (ValueError, TypeError):
@@ -1118,12 +1095,14 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                             if not selected or not state:
                                 return ChallengeAnswerResult(
-                                    "", "", state, gr.update(visible=False), gr.update(), "", ""
+                                    "", gr.update(visible=False), state, gr.update(), "", ""
                                 )
+                                
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
                             st["time_left"] = current_time_left_int
+                            
                             if idx == correct_idx:
                                 points = POINTS_PER_CORRECT
                                 st["streak"] += 1
@@ -1144,24 +1123,23 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 st["streak"] = 0
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
+                                
                             return ChallengeAnswerResult(
-                                fb,
-                                reveal,
-                                json.dumps(obj=st),
-                                gr.update(visible=True),
-                                gr.update(interactive=False),
-                                str(st.get("score", 0)),
-                                str(st.get("streak", 0)),
+                                feedback=fb,
+                                correct_update=gr.update(value=reveal, visible=True),
+                                updated_state=json.dumps(obj=st),
+                                interactive_update=gr.update(interactive=False),
+                                score_update=str(st.get("score", 0)),
+                                streak_update=str(st.get("streak", 0)),
                             )
 
-                        challenge_options.change(
+                        challenge_options.select(
                             on_challenge_answer,
                             inputs=[challenge_options, state_bridge, answer_time_left],
                             outputs=[
                                 challenge_feedback,
-                                challenge_correct,
+                                challenge_correct,  # Maps cleanly to correct_update
                                 state_bridge,
-                                challenge_correct,
                                 challenge_options,
                                 score_display,
                                 streak_display,
