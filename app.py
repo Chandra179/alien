@@ -169,7 +169,7 @@ body::before {
     position: fixed;
     top: 0; left: 0; bottom: 0; right: 0;
     background: linear-gradient(
-        rgba(18, 16, 16, 0) 50%, 
+        rgba(18, 16, 16, 0) 50%,
         rgba(0, 0, 0, 0.22) 50%
     );
     background-size: 100% 4px;
@@ -1097,12 +1097,12 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 return ChallengeAnswerResult(
                                     "", gr.update(visible=False), state, gr.update(), "", ""
                                 )
-                                
+
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
                             st["time_left"] = current_time_left_int
-                            
+
                             if idx == correct_idx:
                                 points = POINTS_PER_CORRECT
                                 st["streak"] += 1
@@ -1123,7 +1123,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 st["streak"] = 0
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
-                                
+
                             return ChallengeAnswerResult(
                                 feedback=fb,
                                 correct_update=gr.update(value=reveal, visible=True),
