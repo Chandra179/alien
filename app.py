@@ -103,6 +103,24 @@ TIMER_HTML = """
             clearInterval(window.gameTimerInterval);
         }
     };
+
+    window.readGameState = function() {
+        return {
+            score: parseInt(localStorage.getItem('game_score') || '0'),
+            streak: parseInt(localStorage.getItem('game_streak') || '0'),
+            time_left: parseInt(localStorage.getItem('game_time_left') || '0'),
+            correct_index: parseInt(localStorage.getItem('game_correct_index') || '0'),
+            theme: localStorage.getItem('game_theme') || 'All',
+            riddle_start_time: parseInt(localStorage.getItem('game_riddle_start_time') || '0'),
+            game_active: localStorage.getItem('game_active') === 'true'
+        };
+    };
+
+    window.writeGameState = function(st) {
+        for (var key in st) {
+            localStorage.setItem('game_' + key, String(st[key]));
+        }
+    };
 })();
 </script>
 """
@@ -317,7 +335,7 @@ button:disabled, .gr-button:disabled {
     color: var(--terminal-color) !important;
 }
 
-#game-state-input, #answer-time-left {
+#answer-time-left {
     display: none !important;
 }
 """
@@ -540,21 +558,18 @@ class GameOverResult(NamedTuple):
     ----------
     timer_display : str
         Display string for the timer, typically set to "00:00".
-    game_state : str
+    state_json : str
         JSON-encoded game state.
     game_row : Any
         Gradio update dict for the game row visibility.
     game_over_row : Any
         Gradio update dict for the game over row visibility.
-    final_score : str
-        The final score as a string.
     """
 
     timer_display: str
-    game_state: str
+    state_json: str
     game_row: Any
     game_over_row: Any
-    final_score: str
 
 
 class ChallengeAnswerResult(NamedTuple):
@@ -937,8 +952,8 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 )
                                 new_game_btn = gr.Button("> NEW GAME")
 
-                        # Game state is stored in a simple hidden textbox for now
-                        game_state = gr.Textbox(visible=True, elem_id="game-state-input")
+                        # State is bridged through localStorage; state_buffer holds temporary JSON
+                        state_bridge = gr.Textbox(visible=False)
                         answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
                         local_storage_score = gr.Textbox(visible=False)
 
@@ -977,7 +992,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 score_display: "0",
                                 streak_display: "0",
                                 timer_display: f"{DEFAULT_GAME_DURATION_MINUTES:02d}:00",
-                                game_state: state,
+                                state_bridge: state,
                             }
 
                         def on_game_over(state: str) -> GameOverResult:
@@ -994,12 +1009,12 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             Returns
                             -------
                             GameOverResult
-                                Custom result object containing timer display, game state, UI visibility
-                                updates, and the final score.
+                                Custom result object containing timer display, game state, and UI visibility
+                                updates.
                             """
                             if not state:
                                 return GameOverResult(
-                                    "00:00", "", gr.update(visible=False), gr.update(visible=True), "0"
+                                    "00:00", "", gr.update(visible=False), gr.update(visible=True)
                                 )
                             st = json.loads(state)
                             st["game_active"] = False
@@ -1009,20 +1024,38 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 json.dumps(st),
                                 gr.update(visible=False),
                                 gr.update(visible=True),
-                                str(st.get("score", 0)),
                             )
 
                         game_over_trigger.click(
                             on_game_over,
-                            inputs=game_state,
+                            inputs=[],
                             outputs=[
                                 timer_display,
-                                game_state,
+                                state_bridge,
                                 game_row,
                                 game_over_row,
-                                final_score,
                             ],
-                            js="""(state) => { window.stopGameTimer(); return state; }""",
+                            js="""() => {
+                                window.stopGameTimer();
+                                return [JSON.stringify(window.readGameState())];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
+                        ).then(
+                            lambda score: score,
+                            inputs=local_storage_score,
+                            outputs=final_score,
+                            js="""(_) => {
+                                return localStorage.getItem("game_score") || "0";
+                            }""",
                         )
 
                         start_btn.click(
@@ -1038,12 +1071,22 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 score_display,
                                 streak_display,
                                 timer_display,
-                                game_state,
+                                state_bridge,
                             ],
                             js=f"""(theme) => {{
                                 window.startGameTimer({DEFAULT_GAME_DURATION_MINUTES * 60});
                                 return theme;
                             }}""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
                         )
 
                         def on_challenge_answer(
@@ -1114,29 +1157,31 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         challenge_options.change(
                             on_challenge_answer,
-                            inputs=[challenge_options, game_state, answer_time_left],
+                            inputs=[challenge_options, answer_time_left],
                             outputs=[
                                 challenge_feedback,
                                 challenge_correct,
-                                game_state,
+                                state_bridge,
                                 challenge_correct,
                                 challenge_options,
                                 score_display,
                                 streak_display,
                             ],
-                            js="""(selected, state, _) => {
+                            js="""(selected, _) => {
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
                                     : 0;
-                                return [selected, state, remainingSec];
+                                return [selected, JSON.stringify(window.readGameState()), remainingSec];
                             }""",
                         ).then(
-                            lambda score: score,
-                            inputs=score_display,
-                            outputs=local_storage_score,
-                            js="""(score) => {
-                                localStorage.setItem("game_score", score);
-                                return score;
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
                             }""",
                         )
 
@@ -1189,44 +1234,62 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         next_challenge_btn.click(
                             on_next_challenge,
-                            inputs=[game_state, answer_time_left],
+                            inputs=[answer_time_left],
                             outputs=[
                                 challenge_riddle,
                                 challenge_options,
                                 challenge_feedback,
                                 challenge_correct,
-                                game_state,
+                                state_bridge,
                             ],
-                            js="""(state, _) => {
+                            js="""(_) => {
                                 window.riddleStartTime = Date.now();
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
                                     : 0;
-                                return [state, remainingSec];
+                                return [JSON.stringify(window.readGameState()), remainingSec];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
                             }""",
                         )
 
                         end_game_btn.click(
                             on_game_over,
-                            inputs=game_state,
+                            inputs=[],
                             outputs=[
                                 timer_display,
-                                game_state,
+                                state_bridge,
                                 game_row,
                                 game_over_row,
-                                final_score,
                             ],
-                            js="""(state) => {
+                            js="""() => {
                                 window.stopGameTimer();
+                                return [JSON.stringify(window.readGameState())];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
                                 try {
-                                    var st = JSON.parse(state);
-                                    var lsScore = localStorage.getItem("game_score");
-                                    if (lsScore !== null) {
-                                        st.score = parseInt(lsScore, 10);
-                                    }
-                                    state = JSON.stringify(st);
+                                    window.writeGameState(JSON.parse(state_json));
                                 } catch (e) {}
-                                return state;
+                                return state_json;
+                            }""",
+                        ).then(
+                            lambda score: score,
+                            inputs=local_storage_score,
+                            outputs=final_score,
+                            js="""(_) => {
+                                return localStorage.getItem("game_score") || "0";
                             }""",
                         )
 
