@@ -49,7 +49,12 @@ def test_color_dropdown_in_ui() -> None:
         if label == "[ PARAM: TERMINAL COLOR ]":
             dropdown_found = True
             choices = getattr(block, "choices", [])
-            assert choices == [("Green", "Green"), ("Blue", "Blue"), ("Red", "Red"), ("Light gray", "Light gray")] or choices == ["Green", "Blue", "Red", "Light gray"]
+            assert choices == [
+                ("Green", "Green"),
+                ("Blue", "Blue"),
+                ("Red", "Red"),
+                ("Light gray", "Light gray"),
+            ] or choices == ["Green", "Blue", "Red", "Light gray"]
             value = getattr(block, "value", None)
             assert value == "Green"
 

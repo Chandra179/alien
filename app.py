@@ -733,7 +733,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             root.style.setProperty('--terminal-border-dim', '#aaaaaa');
                         }
                         return color;
-                    }"""
+                    }""",
                 )
                 with gr.Tabs():
                     # ---------------- Encrypt ----------------
@@ -867,7 +867,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             ],
                         )
 
-                        def on_answer(selected: str, state: str) -> tuple:
+                        def on_answer(selected: Union[str, None], state: str) -> tuple:
                             if not selected:
                                 return "", "", state
                             idx = ord(selected.split(")")[0]) - ord("A")
@@ -1013,9 +1013,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 updates.
                             """
                             if not state:
-                                return GameOverResult(
-                                    "00:00", "", gr.update(visible=False), gr.update(visible=True)
-                                )
+                                return GameOverResult("00:00", "", gr.update(visible=False), gr.update(visible=True))
                             st = json.loads(state)
                             st["game_active"] = False
                             st["time_left"] = 0
@@ -1028,7 +1026,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         game_over_trigger.click(
                             on_game_over,
-                            inputs=[],
+                            inputs=[state_bridge],
                             outputs=[
                                 timer_display,
                                 state_bridge,
@@ -1090,7 +1088,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         )
 
                         def on_challenge_answer(
-                            selected: str, state: str, current_time_left: Union[str, int]
+                            selected: Union[str, None], state: str, current_time_left: Union[str, int]
                         ) -> ChallengeAnswerResult:
                             """Handle the submission of a challenge answer and update game state.
 
@@ -1120,7 +1118,9 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 current_time_left_int = 0
 
                             if not selected or not state:
-                                return ChallengeAnswerResult("", "", state, gr.update(visible=False), gr.update(), "", "")
+                                return ChallengeAnswerResult(
+                                    "", "", state, gr.update(visible=False), gr.update(), "", ""
+                                )
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
@@ -1157,7 +1157,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         challenge_options.change(
                             on_challenge_answer,
-                            inputs=[challenge_options, answer_time_left],
+                            inputs=[challenge_options, state_bridge, answer_time_left],
                             outputs=[
                                 challenge_feedback,
                                 challenge_correct,
@@ -1234,7 +1234,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         next_challenge_btn.click(
                             on_next_challenge,
-                            inputs=[answer_time_left],
+                            inputs=[state_bridge, answer_time_left],
                             outputs=[
                                 challenge_riddle,
                                 challenge_options,
@@ -1263,7 +1263,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         end_game_btn.click(
                             on_game_over,
-                            inputs=[],
+                            inputs=[state_bridge],
                             outputs=[
                                 timer_display,
                                 state_bridge,

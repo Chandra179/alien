@@ -25,6 +25,7 @@ from alien_obfuscator.config import (
     OPENROUTER_TIMEOUT,
     OPENROUTER_URL,
 )
+
 logger = logging.getLogger(__name__)
 
 
@@ -487,7 +488,7 @@ class RiddleGenerator:
         if text.startswith("```"):
             first_newline = text.find("\n")
             if first_newline >= 0:
-                text = text[first_newline + 1:]
+                text = text[first_newline + 1 :]
             else:
                 text = text[3:]
             if text.endswith("```"):
