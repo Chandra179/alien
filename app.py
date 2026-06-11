@@ -940,6 +940,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         # Game state is stored in a simple hidden textbox for now
                         game_state = gr.Textbox(visible=True, elem_id="game-state-input")
                         answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
+                        local_storage_score = gr.Textbox(visible=False)
 
                         with gr.Row(visible=False):
                             game_over_trigger = gr.Button(
@@ -1129,6 +1130,14 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                     : 0;
                                 return [selected, state, remainingSec];
                             }""",
+                        ).then(
+                            lambda score: score,
+                            inputs=score_display,
+                            outputs=local_storage_score,
+                            js="""(score) => {
+                                localStorage.setItem("game_score", score);
+                                return score;
+                            }""",
                         )
 
                         def on_next_challenge(state: str, current_time_left: Union[str, int]) -> NextChallengeResult:
@@ -1207,7 +1216,18 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 game_over_row,
                                 final_score,
                             ],
-                            js="""(state) => { window.stopGameTimer(); return state; }""",
+                            js="""(state) => {
+                                window.stopGameTimer();
+                                try {
+                                    var st = JSON.parse(state);
+                                    var lsScore = localStorage.getItem("game_score");
+                                    if (lsScore !== null) {
+                                        st.score = parseInt(lsScore, 10);
+                                    }
+                                    state = JSON.stringify(st);
+                                } catch (e) {}
+                                return state;
+                            }""",
                         )
 
                         new_game_btn.click(
