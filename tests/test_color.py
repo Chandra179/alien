@@ -23,7 +23,7 @@ def test_on_color_change() -> None:
     -------
     None
     """
-    for color in ["Green", "Blue", "Red", "Light gray"]:
+    for color in ["Green", "Blue", "Red", "Light gray", "No Theme"]:
         assert on_color_change(color) is None
 
 
@@ -54,7 +54,8 @@ def test_color_dropdown_in_ui() -> None:
                 ("Blue", "Blue"),
                 ("Red", "Red"),
                 ("Light gray", "Light gray"),
-            ] or choices == ["Green", "Blue", "Red", "Light gray"]
+                ("No Theme", "No Theme"),
+            ] or choices == ["Green", "Blue", "Red", "Light gray", "No Theme"]
             value = getattr(block, "value", None)
             assert value == "Green"
 

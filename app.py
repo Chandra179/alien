@@ -118,7 +118,7 @@ TIMER_HTML = """
             correct_index: parseInt(localStorage.getItem('game_correct_index') || '0'),
             theme: localStorage.getItem('game_theme') || 'All',
             riddle_start_time: parseInt(localStorage.getItem('game_riddle_start_time') || '0'),
-            game_active: localStorage.getItem('game_active') === 'true'
+            active: localStorage.getItem('game_active') === 'true'
         };
     };
 
@@ -677,7 +677,7 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             with gr.Column(scale=3):
                 color_dropdown = gr.Dropdown(
-                    choices=["Green", "Blue", "Red", "Light gray"],
+                    choices=["Green", "Blue", "Red", "Light gray", "No Theme"],
                     value="Green",
                     label="[ PARAM: TERMINAL COLOR ]",
                     interactive=True,
@@ -688,6 +688,12 @@ def build_ui() -> gr.Blocks:
                     outputs=None,
                     js="""(color) => {
                         const root = document.documentElement;
+                        const theme = document.getElementById('terminal-theme-css');
+                        if (color === "No Theme") {
+                            if (theme) theme.disabled = true;
+                            return color;
+                        }
+                        if (theme) theme.disabled = false;
                         if (color === "Green") {
                             root.style.setProperty('--terminal-color', '#33ff33');
                             root.style.setProperty('--terminal-color-glow', 'rgba(51, 255, 51, 0.8)');
@@ -756,7 +762,7 @@ def build_ui() -> gr.Blocks:
                                     value="greek_myth",
                                     label="[ PARAM: THEME SELECT ]",
                                 )
-                                encrypt_btn = gr.Button("> ENCRYPT")
+                                encrypt_btn = gr.Button("ENCRYPT")
 
                         with gr.Row(visible=False) as encrypt_output_row:
                             with gr.Column():
@@ -825,7 +831,7 @@ def build_ui() -> gr.Blocks:
                                     placeholder="Paste the shared riddle here...",
                                     lines=10,
                                 )
-                                parse_btn = gr.Button("> PARSE RIDDLE")
+                                parse_btn = gr.Button("PARSE RIDDLE")
 
                         with gr.Row(visible=False) as solve_output_row:
                             with gr.Column():
@@ -914,7 +920,7 @@ def build_ui() -> gr.Blocks:
                     with gr.Tab("Challenge"):
                         with gr.Row():
                             with gr.Column():
-                                gr.Markdown("## > CHALLENGE PROTOCOL")
+                                gr.Markdown("## CHALLENGE PROTOCOL")
                                 gr.Markdown(
                                     "Execute decryption sequences. Complete as many nodes as possible before terminal lockout."
                                 )
@@ -924,7 +930,7 @@ def build_ui() -> gr.Blocks:
                                     value="All",
                                     label="[ PARAM: THEME FILTER ]",
                                 )
-                                start_btn = gr.Button("> START GAME")
+                                start_btn = gr.Button("START GAME")
 
                         with gr.Row(visible=False) as game_row:
                             with gr.Column():
@@ -953,6 +959,7 @@ def build_ui() -> gr.Blocks:
                                     label="[ CHOOSE SOLUTION ]",
                                     choices=[],
                                     interactive=True,
+                                    elem_id="challenge-options",
                                 )
                                 challenge_feedback = gr.Textbox(
                                     label="[ COMMAND FEEDBACK ]",
@@ -996,7 +1003,7 @@ def build_ui() -> gr.Blocks:
                                     "correct_index": int(correct),
                                     "theme": theme,
                                     "riddle_start_time": duration_seconds,
-                                    "game_active": True,
+                                    "active": True,
                                 }
                             )
                             return {
@@ -1037,7 +1044,7 @@ def build_ui() -> gr.Blocks:
                             if not state:
                                 return GameOverResult("00:00", "", gr.update(visible=False), gr.update(visible=True), "0")
                             st = json.loads(state)
-                            st["game_active"] = False
+                            st["active"] = False
                             st["time_left"] = 0
                             final_score_value = str(st.get("score", 0))
                             return GameOverResult(
@@ -1069,7 +1076,7 @@ def build_ui() -> gr.Blocks:
                             js="""(state_json) => {
                                 try {
                                     window.writeGameState(JSON.parse(state_json));
-                                } catch (e) {}
+                                } catch (e) { console.error('writeGameState failed:', e); }
                                 return state_json;
                             }""",
                         )
@@ -1100,7 +1107,7 @@ def build_ui() -> gr.Blocks:
                             js="""(state_json) => {
                                 try {
                                     window.writeGameState(JSON.parse(state_json));
-                                } catch (e) {}
+                                } catch (e) { console.error('writeGameState failed:', e); }
                                 return state_json;
                             }""",
                         )
@@ -1142,7 +1149,7 @@ def build_ui() -> gr.Blocks:
                                     fb,
                                     gr.update(value="", visible=False),
                                     json.dumps(st),
-                                    gr.update(interactive=False),
+                                    gr.update(value=None),
                                     str(st["score"]),
                                     str(st["streak"]),
                                 )
@@ -1154,7 +1161,7 @@ def build_ui() -> gr.Blocks:
                                     fb,
                                     gr.update(value=reveal, visible=True),
                                     json.dumps(st),
-                                    gr.update(interactive=False),
+                                    gr.update(value=None),
                                     str(st["score"]),
                                     str(st["streak"]),
                                 )
@@ -1176,12 +1183,14 @@ def build_ui() -> gr.Blocks:
                             js="""(state_json) => {
                                 try {
                                     window.writeGameState(JSON.parse(state_json));
-                                } catch (e) {}
+                                } catch (e) { console.error('writeGameState failed:', e); }
+                                var inputs = document.querySelectorAll('#challenge-options input[type="radio"]');
+                                inputs.forEach(function(el) { el.disabled = true; });
                                 return state_json;
                             }""",
                         )
 
-                        def on_next_challenge(state: str, current_time_left: Union[str, int]) -> NextChallengeResult:
+                        def on_next_challenge(state: str, current_time_left: Union[str, int]):
                             """Generate the next riddle challenge and update game state.
 
                             This function parses the current state, generates a new challenge riddle
@@ -1197,9 +1206,8 @@ def build_ui() -> gr.Blocks:
 
                             Returns
                             -------
-                            NextChallengeResult
-                                Custom result object containing the new riddle, options update, cleared feedback,
-                                cleared reveal message, and the updated game state.
+                            dict
+                                Mapping of Gradio components to their updated values.
                             """
                             try:
                                 current_time_left_int = int(current_time_left)
@@ -1207,26 +1215,57 @@ def build_ui() -> gr.Blocks:
                                 current_time_left_int = 0
 
                             if not state:
-                                return NextChallengeResult("", "", [], "", state)
-                            st = json.loads(state)
-                            if not st.get("game_active", False):
-                                return NextChallengeResult("", "", [], "", state)
+                                return {
+                                    challenge_riddle: "ERROR: Game state is missing. Please start a new game.",
+                                    challenge_options: gr.update(choices=[], value=None, interactive=True),
+                                    challenge_feedback: "",
+                                    challenge_correct: gr.update(visible=False),
+                                    state_bridge: state,
+                                }
+                            try:
+                                st = json.loads(state)
+                            except (json.JSONDecodeError, TypeError):
+                                return {
+                                    challenge_riddle: "ERROR: Game state is corrupted. Please start a new game.",
+                                    challenge_options: gr.update(choices=[], value=None, interactive=True),
+                                    challenge_feedback: "",
+                                    challenge_correct: gr.update(visible=False),
+                                    state_bridge: state,
+                                }
+                            if not st.get("active", False):
+                                return {
+                                    challenge_riddle: "SESSION EXPIRED: Click START GAME to begin a new session.",
+                                    challenge_options: gr.update(choices=[], value=None, interactive=True),
+                                    challenge_feedback: "",
+                                    challenge_correct: gr.update(visible=False),
+                                    state_bridge: json.dumps(st),
+                                }
+
                             st["time_left"] = current_time_left_int
-                            riddle, opts, correct = generate_challenge_riddle(st["theme"])
-                            options = json.loads(opts)
+                            try:
+                                riddle, opts, correct = generate_challenge_riddle(st["theme"])
+                                options = json.loads(opts)
+                            except Exception as exc:
+                                return {
+                                    challenge_riddle: f"Error: {exc}",
+                                    challenge_options: gr.update(choices=[], value=None, interactive=True),
+                                    challenge_feedback: "",
+                                    challenge_correct: gr.update(visible=False),
+                                    state_bridge: json.dumps(st),
+                                }
                             st["correct_index"] = int(correct)
                             st["riddle_start_time"] = current_time_left_int
-                            return NextChallengeResult(
-                                riddle,
-                                gr.update(
+                            return {
+                                challenge_riddle: riddle,
+                                challenge_options: gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
                                     value=None,
                                     interactive=True,
                                 ),
-                                "",
-                                "",
-                                json.dumps(st),
-                            )
+                                challenge_feedback: "",
+                                challenge_correct: gr.update(visible=False),
+                                state_bridge: json.dumps(st),
+                            }
 
                         next_challenge_btn.click(
                             on_next_challenge,
@@ -1252,7 +1291,9 @@ def build_ui() -> gr.Blocks:
                             js="""(state_json) => {
                                 try {
                                     window.writeGameState(JSON.parse(state_json));
-                                } catch (e) {}
+                                } catch (e) { console.error('writeGameState failed:', e); }
+                                var inputs = document.querySelectorAll('#challenge-options input[type="radio"]');
+                                inputs.forEach(function(el) { el.disabled = false; });
                                 return state_json;
                             }""",
                         )
@@ -1278,7 +1319,7 @@ def build_ui() -> gr.Blocks:
                             js="""(state_json) => {
                                 try {
                                     window.writeGameState(JSON.parse(state_json));
-                                } catch (e) {}
+                                } catch (e) { console.error('writeGameState failed:', e); }
                                 return state_json;
                             }""",
                         )
@@ -1322,5 +1363,5 @@ def build_ui() -> gr.Blocks:
 
 if __name__ == "__main__":
     app = build_ui()
-    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML
-    app.launch(css=FALLOUT_CSS, head=head_html_content)
+    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML + "\n<style id='terminal-theme-css'>" + FALLOUT_CSS + "</style>"
+    app.launch(head=head_html_content)
