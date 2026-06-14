@@ -26,6 +26,7 @@ backends:
   modal:
     default_model: "google/gemma-4-31b-it"
     timeout: 300
+    scaledown_window_minutes: 30
 
 llm:
   temperature: 0.8

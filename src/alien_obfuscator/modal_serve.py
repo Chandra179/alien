@@ -11,13 +11,26 @@ After deployment, set the URL in your .env::
 """
 
 import json
+import subprocess
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
 from typing import Any
 
 import aiohttp
 from aiohttp import ClientTimeout
 import modal
+import yaml
 
-MODEL_NAME = "google/gemma-4-31b-it"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_CONFIG_PATH = _PROJECT_ROOT / "config.yaml"
+
+with open(_CONFIG_PATH, encoding="utf-8") as _f:
+    _cfg = yaml.safe_load(_f)
+
+MODEL_NAME: str = _cfg["backends"]["modal"]["default_model"]
+SCALEDOWN_WINDOW_MINUTES: int = _cfg["backends"]["modal"]["scaledown_window_minutes"]
 
 N_GPU = 1
 MINUTES = 60
@@ -31,6 +44,7 @@ vllm_image = (
     )
     .entrypoint([])
     .uv_pip_install("vllm==0.21.0")
+    .add_local_file(str(_CONFIG_PATH), "/opt/config.yaml", copy=True)
     .env(
         {
             "HF_XET_HIGH_PERFORMANCE": "1",
@@ -48,7 +62,7 @@ app = modal.App("modal-gemma")
 @app.function(
     image=vllm_image,
     gpu=f"H200:{N_GPU}",
-    scaledown_window=15 * MINUTES,
+    scaledown_window=SCALEDOWN_WINDOW_MINUTES * MINUTES,
     timeout=10 * MINUTES,
     volumes={
         "/root/.cache/huggingface": hf_cache_vol,
@@ -59,8 +73,6 @@ app = modal.App("modal-gemma")
 @modal.concurrent(max_inputs=100)
 @modal.web_server(port=VLLM_PORT, startup_timeout=10 * MINUTES)
 def serve() -> None:
-    import subprocess
-
     cmd = [
         "vllm",
         "serve",
@@ -91,6 +103,46 @@ def serve() -> None:
 
     print(*cmd)
     subprocess.Popen(" ".join(cmd), shell=True)
+    _warm_up()
+
+
+def _warm_up() -> None:
+    """Poll /health then send a short warm-up request to trigger JIT compilation.
+
+    After vLLM starts, the first real request triggers Triton kernel JIT
+    compilation (~2-3 s extra latency).  Sending a trivial prompt during
+    startup absorbs this one-time cost so end-users never see it.
+    """
+    health_url = f"http://0.0.0.0:{VLLM_PORT}/health"
+    for i in range(300):
+        try:
+            with urllib.request.urlopen(health_url) as resp:
+                if resp.status == 200:
+                    print(f"vLLM healthy after {i * 2}s")
+                    break
+        except (urllib.error.URLError, ConnectionRefusedError, OSError):
+            pass
+        time.sleep(2)
+    else:
+        print("Warning: vLLM did not become healthy within 10 minutes")
+        return
+
+    warmup_payload = json.dumps({
+        "model": MODEL_NAME,
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 5,
+    }).encode()
+
+    warmup_req = urllib.request.Request(
+        f"http://0.0.0.0:{VLLM_PORT}/v1/chat/completions",
+        data=warmup_payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(warmup_req, timeout=120) as resp:
+            print(f"Warm-up complete (status {resp.status})")
+    except Exception as e:
+        print(f"Warm-up request failed: {e}")
 
 
 @app.local_entrypoint()
