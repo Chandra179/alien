@@ -24,10 +24,16 @@ import modal
 import yaml
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_CONFIG_PATH = _PROJECT_ROOT / "config.yaml"
+_LOCAL_CONFIG_PATH = _PROJECT_ROOT / "config.yaml"
+_IMAGE_CONFIG_PATH = Path("/opt/config.yaml")
 
-with open(_CONFIG_PATH, encoding="utf-8") as _f:
-    _cfg = yaml.safe_load(_f)
+for _config_path in (_IMAGE_CONFIG_PATH, _LOCAL_CONFIG_PATH):
+    if _config_path.exists():
+        _cfg = yaml.safe_load(_config_path.read_text(encoding="utf-8"))
+        break
+else:
+    _msg = f"config.yaml not found at {_IMAGE_CONFIG_PATH} or {_LOCAL_CONFIG_PATH}"
+    raise FileNotFoundError(_msg)
 
 MODEL_NAME: str = _cfg["backends"]["modal"]["default_model"]
 SCALEDOWN_WINDOW_MINUTES: int = _cfg["backends"]["modal"]["scaledown_window_minutes"]
@@ -44,7 +50,7 @@ vllm_image = (
     )
     .entrypoint([])
     .uv_pip_install("vllm==0.21.0")
-    .add_local_file(str(_CONFIG_PATH), "/opt/config.yaml", copy=True)
+    .add_local_file(str(_LOCAL_CONFIG_PATH), "/opt/config.yaml", copy=True)
     .env(
         {
             "HF_XET_HIGH_PERFORMANCE": "1",
