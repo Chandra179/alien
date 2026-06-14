@@ -11,7 +11,7 @@ from pathlib import Path
 # Ensure root directory is in path so we can import app.py
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app import build_ui, GameOverResult, ChallengeAnswerResult, NextChallengeResult
+from app import build_ui, GameOverResult, ChallengeAnswerResult
 
 
 def test_challenge_handlers() -> None:
@@ -51,7 +51,7 @@ def test_challenge_handlers() -> None:
         "correct_index": 0,  # 'A'
         "theme": "All",
         "riddle_start_time": 120,
-        "game_active": True,
+        "active": True,
     }
     state_str = json.dumps(initial_state)
 
@@ -60,17 +60,18 @@ def test_challenge_handlers() -> None:
     res_ans = on_challenge_answer_fn("A) Option A", state_str, "115")
     assert isinstance(res_ans, ChallengeAnswerResult)
     assert "Correct!" in res_ans.feedback
-    assert res_ans.reveal == ""
+    assert res_ans.correct_update.get("visible") is False
     st = json.loads(res_ans.updated_state)
     assert st["time_left"] == 115
     assert st["streak"] == 3
     assert st["score"] > 10
+    assert res_ans.interactive_update is not None
     assert res_ans.interactive_update.get("interactive") is False
+    assert "value" not in res_ans.interactive_update
 
     # Unpack to verify tuple unpacking compatibility
-    fb, reveal, next_state, update, radio_update, score_upd, streak_upd = res_ans
+    fb, correct_update, updated_state, interactive_update, score_upd, streak_upd = res_ans
     assert fb == res_ans.feedback
-    assert reveal == res_ans.reveal
 
     # Verify that calling on_game_over with the updated state (after correct answer)
     # returns the updated state including the score.
@@ -86,28 +87,41 @@ def test_challenge_handlers() -> None:
     st_int = json.loads(res_ans_wrong.updated_state)
     assert st_int["time_left"] == 115
     assert st_int["streak"] == 0
+    assert res_ans_wrong.interactive_update is not None
     assert res_ans_wrong.interactive_update.get("interactive") is False
+    assert "value" not in res_ans_wrong.interactive_update
 
     # 3. Test on_next_challenge with string current_time_left
     res_nc = on_next_challenge_fn(state_str, "100")
-    assert isinstance(res_nc, NextChallengeResult)
-    assert res_nc.feedback == ""
-    assert res_nc.reveal == ""
-    assert res_nc.options_update.get("interactive") is True
-    st_nc = json.loads(res_nc.updated_state)
+    assert isinstance(res_nc, dict)
+    # The dict maps component objects to their update values
+    # Verify it has the expected number of entries (5 components)
+    assert len(res_nc) == 5
+    # Verify the radio update has interactive=True
+    options_update = None
+    for _comp, val in res_nc.items():
+        if isinstance(val, dict) and val.get("__type__") == "update" and "choices" in val:
+            options_update = val
+            break
+    assert options_update is not None
+    assert options_update.get("interactive") is True
+    # Verify the state was updated
+    state_value = None
+    for _comp, val in res_nc.items():
+        if isinstance(val, str) and val.startswith("{"):
+            state_value = val
+            break
+    assert state_value is not None
+    st_nc = json.loads(state_value)
     assert st_nc["time_left"] == 100
     assert st_nc["riddle_start_time"] == 100
-
-    # Unpack to verify tuple unpacking compatibility
-    riddle, opt_upd, fb_nc, rev_nc, state_nc = res_nc
-    assert riddle == res_nc.riddle
 
     # 4. Test on_game_over
     res_go = on_game_over_fn(state_str)
     assert isinstance(res_go, GameOverResult)
     assert res_go.timer_display == "00:00"
     st_go = json.loads(res_go.state_json)
-    assert st_go["game_active"] is False
+    assert st_go["active"] is False
     assert st_go["time_left"] == 0
     st_go = json.loads(res_go.state_json)
     assert st_go["score"] == 10

@@ -29,3 +29,11 @@ ty:
 .PHONY: req/generate
 req/generate:
 	@uv pip compile pyproject.toml -o requirements.txt
+
+.PHONY: modal/run
+modal/run:
+	@uv run modal run src/alien_obfuscator/modal_serve.py
+
+.PHONY: modal/deploy
+modal/deploy:
+	@uv run modal deploy src/alien_obfuscator/modal_serve.py

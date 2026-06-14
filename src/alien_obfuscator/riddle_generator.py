@@ -18,6 +18,7 @@ from alien_obfuscator.config import (
     LLM_TEMPERATURE,
     MAX_PLAINTEXT_LENGTH,
     MAX_RETRIES,
+    MODAL_TIMEOUT,
     MOCK_DISTRACTORS,
     NUM_OPTIONS,
     OPENCODE_GO_TIMEOUT,
@@ -399,6 +400,112 @@ class OpenCodeGoBackend(OpenAICompatibleBackend):
             provider_name="OpenCode Go",
             timeout=OPENCODE_GO_TIMEOUT,
         )
+
+
+class ModalBackend(OpenAICompatibleBackend):
+    """Backend for a Modal-deployed vLLM server (OpenAI-compatible).
+
+    Connects to a pre-deployed Modal vLLM instance serving an LLM.
+    The Modal API URL is public by default — no authentication is needed
+    beyond the URL itself.
+
+    Parameters
+    ----------
+    model_id : str
+        Model identifier served by the Modal endpoint
+        (e.g. ``"google/gemma-4-31b-it"``).
+    api_url : str | None
+        Base URL of the Modal-deployed vLLM server. If ``None``, read from
+        the ``MODAL_API_URL`` environment variable.
+    """
+
+    def __init__(
+        self,
+        model_id: str,
+        api_url: str | None = None,
+    ) -> None:
+        import os
+
+        resolved_url = api_url or os.environ.get("MODAL_API_URL", "")
+        if not resolved_url:
+            raise ValueError(
+                "Modal API URL not provided and MODAL_API_URL not set in environment."
+            )
+
+        super().__init__(
+            model_id=model_id,
+            api_key=None,
+            api_url=resolved_url.rstrip("/") + "/v1/chat/completions",
+            key_env_var="",
+            provider_name="Modal",
+            timeout=MODAL_TIMEOUT,
+        )
+
+    def generate(self, prompt: str) -> str:
+        """Call the Modal-deployed vLLM server and return the generated text.
+
+        Modal web endpoints are public, so no API key is required.
+
+        Parameters
+        ----------
+        prompt : str
+            The prompt to send.
+
+        Returns
+        -------
+        str
+            Raw model output.
+
+        Raises
+        ------
+        RuntimeError
+            If the API request fails or returns an error.
+        """
+        import requests
+
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "model": self.model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": LLM_MAX_TOKENS,
+            "temperature": LLM_TEMPERATURE,
+        }
+
+        response = requests.post(
+            self._api_url, headers=headers, json=payload, timeout=self._timeout
+        )
+        if response.status_code != 200:
+            logger.error(
+                "%s API error %d: %s",
+                self._provider_name,
+                response.status_code,
+                response.text,
+            )
+            raise RuntimeError(
+                f"{self._provider_name} API error {response.status_code}: {response.text}"
+            )
+
+        data = response.json()
+        choices = data.get("choices", [])
+        if not choices:
+            logger.error(
+                "%s returned no choices. Response: %s",
+                self._provider_name,
+                str(data)[:500],
+            )
+            raise RuntimeError(f"{self._provider_name} returned no choices.")
+        msg = choices[0].get("message", {})
+        content = msg.get("content", "")
+        if not content:
+            content = msg.get("reasoning_content", "")
+        if not content:
+            logger.error(
+                "%s returned empty content. Full response: %s",
+                self._provider_name,
+                str(data)[:500],
+            )
+            raise RuntimeError(f"{self._provider_name} returned empty content.")
+        return content
 
 
 # ---------------------------------------------------------------------------
