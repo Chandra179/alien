@@ -1,3 +1,6 @@
+-include .env
+export
+
 .PHONY: start
 start:
 	@uv run app.py
@@ -40,4 +43,4 @@ modal/deploy:
 
 .PHONY: deploy/hf
 deploy/hf:
-	git push hf main
+	git pull hf main --rebase && git push https://Chandra179:$(HF_TOKEN)@huggingface.co/spaces/build-small-hackathon/alien-riddle main
