@@ -5,6 +5,10 @@ This module is a thin launcher that delegates UI construction to the
 Re-exports kept for backward compatibility with existing tests.
 """
 
+import sys
+
+sys.path.insert(0, "src")
+
 from alien_obfuscator.ui.app import build_ui
 from alien_obfuscator.ui.challenge import ChallengeAnswerResult, GameOverResult
 from alien_obfuscator.ui.helpers import on_color_change
