@@ -37,3 +37,7 @@ modal/run:
 .PHONY: modal/deploy
 modal/deploy:
 	@uv run modal deploy src/alien_obfuscator/modal_serve.py
+
+.PHONY: deploy/hf
+deploy/hf:
+	git push hf main
