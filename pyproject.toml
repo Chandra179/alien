@@ -16,6 +16,7 @@ dependencies = [
     "ty>=0.0.44",
     "pytest-cov>=7.1.0",
     "modal>=1.5.0",
+    "pydantic>=2.11.10,<=2.12.5",
 ]
 
 [build-system]

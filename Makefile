@@ -43,4 +43,11 @@ modal/deploy:
 
 .PHONY: deploy/hf
 deploy/hf:
-	git pull hf main --rebase && git push https://Chandra179:$(HF_TOKEN)@huggingface.co/spaces/build-small-hackathon/alien-riddle main
+	hf upload build-small-hackathon/alien-riddle ./ --type space \
+		--exclude ".git/*" --exclude ".gitignore" \
+		--exclude ".venv/*" --exclude ".env" --exclude ".env.example" \
+		--exclude "__pycache__/*" --exclude "*.pyc" \
+		--exclude ".pytest_cache/*" --exclude ".ruff_cache/*" \
+		--exclude ".mypy_cache/*" --exclude ".coverage*" \
+		--exclude "htmlcov/*" \
+		--commit-message="deploy from GitHub"
