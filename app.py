@@ -8,6 +8,7 @@ game engine.
 import json
 import os
 import random
+from typing import Any, NamedTuple, Union
 
 import gradio as gr
 from dotenv import load_dotenv
@@ -18,9 +19,6 @@ from alien_obfuscator.config import (
     DEFAULT_BACKEND,
     DEFAULT_GAME_DURATION_MINUTES,
     HF_DEFAULT_MODEL,
-    LAUNCH_SERVER_NAME,
-    LAUNCH_SERVER_PORT,
-    LAUNCH_SHARE,
     MAX_PLAINTEXT_LENGTH,
     MODAL_DEFAULT_MODEL,
     NUM_OPTIONS,
@@ -111,9 +109,249 @@ TIMER_HTML = """
             clearInterval(window.gameTimerInterval);
         }
     };
+
+    window.readGameState = function() {
+        return {
+            score: parseInt(localStorage.getItem('game_score') || '0'),
+            streak: parseInt(localStorage.getItem('game_streak') || '0'),
+            time_left: parseInt(localStorage.getItem('game_time_left') || '0'),
+            correct_index: parseInt(localStorage.getItem('game_correct_index') || '0'),
+            theme: localStorage.getItem('game_theme') || 'All',
+            riddle_start_time: parseInt(localStorage.getItem('game_riddle_start_time') || '0'),
+            game_active: localStorage.getItem('game_active') === 'true'
+        };
+    };
+
+    window.writeGameState = function(st) {
+        for (var key in st) {
+            localStorage.setItem('game_' + key, String(st[key]));
+        }
+    };
 })();
 </script>
 """
+
+# ---------------------------------------------------------------------------
+# Custom Fallout / RobCo Terminal Styling
+# ---------------------------------------------------------------------------
+
+FALLOUT_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+:root {
+    --terminal-color: #33ff33;
+    --terminal-color-glow: rgba(51, 255, 51, 0.8);
+    --terminal-color-glow-low: rgba(51, 255, 51, 0.5);
+    --terminal-color-glow-container: rgba(51, 255, 51, 0.25);
+    --terminal-color-glow-container-outer: rgba(51, 255, 51, 0.15);
+    --terminal-bg-glow: #0d1f0d;
+    --terminal-bg: #030703;
+    --terminal-placeholder: #1a5c1a;
+    --terminal-disabled-bg: #010301;
+    --terminal-disabled-color: #114411;
+    --terminal-border-dim: #22aa22;
+}
+
+/* Apply VT323 retro font and scanline styles to all components */
+body, .gradio-container, .gradio-container * {
+    font-family: 'VT323', 'Courier New', Courier, monospace !important;
+    font-size: 1.25rem !important;
+    border-radius: 0px !important;
+    box-shadow: none !important;
+    line-height: 1.3 !important;
+}
+
+body {
+    background-color: var(--terminal-bg) !important;
+    color: var(--terminal-color) !important;
+    margin: 0;
+    padding: 0;
+}
+
+/* Subtle scanlines overlay simulating CRT screen */
+body::before {
+    content: " ";
+    display: block;
+    position: fixed;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%,
+        rgba(0, 0, 0, 0.22) 50%
+    );
+    background-size: 100% 4px;
+    z-index: 99999;
+    pointer-events: none;
+}
+
+/* Container framing with classic terminal border and CRT glow */
+.gradio-container {
+    background-color: var(--terminal-bg) !important;
+    border: 3px solid var(--terminal-color) !important;
+    box-shadow: 0 0 25px var(--terminal-color-glow-container) inset, 0 0 15px var(--terminal-color-glow-container-outer) !important;
+    max-width: 950px !important;
+    margin: 40px auto !important;
+    padding: 25px !important;
+}
+
+/* Headers with glow effects */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--terminal-color) !important;
+    text-shadow: 0 0 8px var(--terminal-color-glow) !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+}
+h1 { font-size: 2.4rem !important; }
+h2 { font-size: 1.9rem !important; }
+h3 { font-size: 1.6rem !important; }
+
+/* Plain text and label adjustments */
+p, span, li {
+    color: var(--terminal-color) !important;
+    text-shadow: 0 0 3px var(--terminal-color-glow-low) !important;
+}
+
+/* Flat solid terminal panels for all Gradio blocks */
+.block, .form, .panel, .gr-box, .gr-panel, .gr-block {
+    background-color: #000000 !important;
+    border: 1px solid var(--terminal-color) !important;
+    padding: 15px !important;
+    margin-bottom: 12px !important;
+}
+
+/* Text Inputs, textareas, and select menus */
+input, textarea, select, .gr-input, .gr-textarea {
+    background-color: #000000 !important;
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
+    font-family: 'VT323', monospace !important;
+    padding: 8px !important;
+    text-shadow: 0 0 3px var(--terminal-color-glow-low) !important;
+}
+input::placeholder, textarea::placeholder {
+    color: var(--terminal-placeholder) !important;
+    text-shadow: none !important;
+}
+input:focus, textarea:focus, select:focus {
+    border-color: var(--terminal-color) !important;
+    box-shadow: 0 0 10px var(--terminal-color-glow) !important;
+    outline: none !important;
+}
+
+/* Dropdown menus & wrappers */
+.dropdown-menu, .options, .select-wrap, .dropdown, select {
+    background-color: #000000 !important;
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
+}
+
+/* Retro buttons with glowing hover state */
+button, .gr-button {
+    background-color: var(--terminal-bg-glow) !important;
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
+    text-transform: uppercase !important;
+    font-weight: bold !important;
+    font-family: 'VT323', monospace !important;
+    padding: 8px 16px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease-in-out !important;
+    text-shadow: 0 0 3px var(--terminal-color-glow-low) !important;
+}
+button:hover, .gr-button:hover {
+    background-color: var(--terminal-color) !important;
+    color: #000000 !important;
+    box-shadow: 0 0 12px var(--terminal-color-glow) !important;
+    text-shadow: none !important;
+}
+button:disabled, .gr-button:disabled {
+    background-color: var(--terminal-disabled-bg) !important;
+    color: var(--terminal-disabled-color) !important;
+    border-color: var(--terminal-disabled-color) !important;
+    cursor: not-allowed !important;
+    text-shadow: none !important;
+}
+
+/* Tab bar customization */
+.tab-nav, [role="tablist"], .tabs {
+    border-bottom: 2px solid var(--terminal-color) !important;
+    background-color: #000000 !important;
+    margin-bottom: 15px !important;
+}
+.tab-nav button, [role="tab"], .tabs button {
+    background-color: transparent !important;
+    color: var(--terminal-border-dim) !important;
+    border: none !important;
+    font-size: 1.5rem !important;
+    padding: 10px 18px !important;
+}
+.tab-nav button:hover, [role="tab"]:hover, .tabs button:hover {
+    color: var(--terminal-color) !important;
+}
+.tab-nav button.selected, [aria-selected="true"], .tabs button.selected, .tabitem.selected {
+    color: var(--terminal-color) !important;
+    border: 1px solid var(--terminal-color) !important;
+    border-bottom: 1px solid var(--terminal-bg) !important;
+    background-color: var(--terminal-bg-glow) !important;
+    text-shadow: 0 0 6px var(--terminal-color-glow) !important;
+}
+
+/* Header style specifically for terminal branding */
+.terminal-header {
+    border-bottom: 2px dashed var(--terminal-color) !important;
+    margin-bottom: 20px !important;
+    padding-bottom: 10px !important;
+}
+.terminal-header-text {
+    font-family: 'VT323', monospace !important;
+    color: var(--terminal-color) !important;
+    text-shadow: 0 0 5px var(--terminal-color-glow) !important;
+    line-height: 1.2 !important;
+    white-space: pre;
+}
+
+/* Text labels on panels and widgets */
+.block-label, .gr-block-label, label, label span {
+    background-color: #000000 !important;
+    color: var(--terminal-color) !important;
+    font-family: 'VT323', monospace !important;
+    text-transform: uppercase !important;
+    font-weight: bold !important;
+}
+
+/* Custom styles for checkboxes and radios */
+.gr-radio, input[type="radio"], input[type="checkbox"] {
+    accent-color: var(--terminal-color) !important;
+}
+.gr-radio label, .radio-group label {
+    border: 1px solid var(--terminal-border-dim) !important;
+    color: var(--terminal-border-dim) !important;
+    background-color: #000000 !important;
+}
+.gr-radio label.selected, .radio-group label.selected {
+    border-color: var(--terminal-color) !important;
+    color: var(--terminal-color) !important;
+    background-color: var(--terminal-bg-glow) !important;
+    text-shadow: 0 0 4px var(--terminal-color-glow-low) !important;
+}
+
+/* Inner elements for custom look */
+.copy-btn, button.svelte-custom {
+    background-color: var(--terminal-bg-glow) !important;
+    border: 1px solid var(--terminal-color) !important;
+    color: var(--terminal-color) !important;
+}
+
+#answer-time-left {
+    display: none !important;
+}
+"""
+
+GOOGLE_FONT_HTML = """
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+"""
+
 
 # ---------------------------------------------------------------------------
 # Shared UI helpers
@@ -232,7 +470,12 @@ def parse_riddle_card(card_text: str) -> tuple[str, str, str, str]:
             or line.startswith("E) ")
         ):
             options.append(line[3:].strip())
-        elif line and not line.startswith("━") and not line.startswith("Alien Obfuscator") and not line.startswith("Can you"):
+        elif (
+            line
+            and not line.startswith("━")
+            and not line.startswith("Alien Obfuscator")
+            and not line.startswith("Can you")
+        ):
             riddle_lines.append(line)
 
     if len(options) != NUM_OPTIONS:
@@ -314,6 +557,102 @@ def generate_challenge_riddle(theme_filter: str) -> tuple[str, str, str]:
         return f"Error: {exc}", "[]", "-1"
 
 
+class GameOverResult(NamedTuple):
+    """Result returned by the game over event handler.
+
+    Attributes
+    ----------
+    timer_display : str
+        Display string for the timer, typically set to "00:00".
+    state_json : str
+        JSON-encoded game state.
+    game_row : Any
+        Gradio update dict for the game row visibility.
+    game_over_row : Any
+        Gradio update dict for the game over row visibility.
+    final_score : Any
+        The final score component.
+    """
+
+    timer_display: str
+    state_json: str
+    game_row: Any
+    game_over_row: Any
+    final_score: Any
+
+
+class ChallengeAnswerResult(NamedTuple):
+    """Result returned by the challenge answer event handler.
+
+    Attributes
+    ----------
+    feedback : str
+        Response message regarding correctness and points.
+    reveal : str
+        Correct answer representation if incorrect, else empty string.
+    updated_state : str
+        Updated JSON-serialized game state.
+    visibility_update : Any
+        Gradio update dict for solution visibility.
+    interactive_update : Any
+        Gradio update dict to disable challenge options.
+    score_update : str
+        The updated score to display.
+    streak_update : str
+        The updated streak to display.
+    """
+
+    feedback: str
+    correct_update: Any  # Combines both value and visibility properties
+    updated_state: str
+    interactive_update: Any
+    score_update: str
+    streak_update: str
+
+
+class NextChallengeResult(NamedTuple):
+    """Result returned by the next challenge event handler.
+
+    Attributes
+    ----------
+    riddle : str
+        The new riddle question.
+    options_update : Any
+        Gradio update containing new answer options.
+    feedback : Any
+        Cleared feedback message or updated component.
+    reveal : str
+        Cleared correct answer reveal message.
+    updated_state : str
+        Updated JSON-serialized game state.
+    """
+
+    riddle: str
+    options_update: Any
+    feedback: Any
+    reveal: str
+    updated_state: str
+
+
+def on_color_change(color: str) -> None:
+    """Handle TUI terminal color changes.
+
+    This function is triggered when the user selects a different color option
+    from the dropdown menu. It accepts the selected color name but returns
+    None, as styling modifications are applied client-side via JavaScript.
+
+    Parameters
+    ----------
+    color : str
+        The selected color name ("Green", "Blue", "Red", "Light gray").
+
+    Returns
+    -------
+    None
+    """
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Gradio UI
 # ---------------------------------------------------------------------------
@@ -325,7 +664,7 @@ def build_ui() -> gr.Blocks:
     Returns
     -------
     gr.Blocks
-        The fully assembled Gradio interface.
+        The fully assembled Gradio interface with Fallout themed terminal style.
     """
     DISABLED_RADIO_CSS = """
     input[type="radio"]:disabled {
@@ -337,13 +676,77 @@ def build_ui() -> gr.Blocks:
 
         with gr.Row():
             with gr.Column(scale=3):
+                color_dropdown = gr.Dropdown(
+                    choices=["Green", "Blue", "Red", "Light gray"],
+                    value="Green",
+                    label="[ PARAM: TERMINAL COLOR ]",
+                    interactive=True,
+                )
+                color_dropdown.change(
+                    on_color_change,
+                    inputs=color_dropdown,
+                    outputs=None,
+                    js="""(color) => {
+                        const root = document.documentElement;
+                        if (color === "Green") {
+                            root.style.setProperty('--terminal-color', '#33ff33');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(51, 255, 51, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(51, 255, 51, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(51, 255, 51, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(51, 255, 51, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#0d1f0d');
+                            root.style.setProperty('--terminal-bg', '#030703');
+                            root.style.setProperty('--terminal-placeholder', '#1a5c1a');
+                            root.style.setProperty('--terminal-disabled-bg', '#010301');
+                            root.style.setProperty('--terminal-disabled-color', '#114411');
+                            root.style.setProperty('--terminal-border-dim', '#22aa22');
+                        } else if (color === "Blue") {
+                            root.style.setProperty('--terminal-color', '#3399ff');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(51, 153, 255, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(51, 153, 255, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(51, 153, 255, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(51, 153, 255, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#0a1c33');
+                            root.style.setProperty('--terminal-bg', '#02050a');
+                            root.style.setProperty('--terminal-placeholder', '#153e66');
+                            root.style.setProperty('--terminal-disabled-bg', '#000103');
+                            root.style.setProperty('--terminal-disabled-color', '#0f2d4a');
+                            root.style.setProperty('--terminal-border-dim', '#2277aa');
+                        } else if (color === "Red") {
+                            root.style.setProperty('--terminal-color', '#ff3333');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(255, 51, 51, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(255, 51, 51, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(255, 51, 51, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(255, 51, 51, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#2b0a0a');
+                            root.style.setProperty('--terminal-bg', '#0a0202');
+                            root.style.setProperty('--terminal-placeholder', '#661515');
+                            root.style.setProperty('--terminal-disabled-bg', '#030000');
+                            root.style.setProperty('--terminal-disabled-color', '#4a0f0f');
+                            root.style.setProperty('--terminal-border-dim', '#aa2222');
+                        } else if (color === "Light gray") {
+                            root.style.setProperty('--terminal-color', '#e0e0e0');
+                            root.style.setProperty('--terminal-color-glow', 'rgba(224, 224, 224, 0.8)');
+                            root.style.setProperty('--terminal-color-glow-low', 'rgba(224, 224, 224, 0.5)');
+                            root.style.setProperty('--terminal-color-glow-container', 'rgba(224, 224, 224, 0.25)');
+                            root.style.setProperty('--terminal-color-glow-container-outer', 'rgba(224, 224, 224, 0.15)');
+                            root.style.setProperty('--terminal-bg-glow', '#242424');
+                            root.style.setProperty('--terminal-bg', '#0a0a0a');
+                            root.style.setProperty('--terminal-placeholder', '#5c5c5c');
+                            root.style.setProperty('--terminal-disabled-bg', '#030303');
+                            root.style.setProperty('--terminal-disabled-color', '#444444');
+                            root.style.setProperty('--terminal-border-dim', '#aaaaaa');
+                        }
+                        return color;
+                    }""",
+                )
                 with gr.Tabs():
                     # ---------------- Encrypt ----------------
                     with gr.Tab("Encrypt"):
                         with gr.Row():
                             with gr.Column():
                                 plaintext_input = gr.Textbox(
-                                    label="Message to encrypt",
+                                    label="[ INPUT: MESSAGE TO ENCRYPT ]",
                                     placeholder="Enter your secret message...",
                                     lines=2,
                                     max_lines=3,
@@ -351,9 +754,9 @@ def build_ui() -> gr.Blocks:
                                 theme_dropdown = gr.Dropdown(
                                     choices=[(label, key) for key, label in THEME_LABELS.items()],
                                     value="greek_myth",
-                                    label="Theme",
+                                    label="[ PARAM: THEME SELECT ]",
                                 )
-                                encrypt_btn = gr.Button("Encrypt")
+                                encrypt_btn = gr.Button("> ENCRYPT")
 
                         with gr.Row(visible=False) as encrypt_output_row:
                             with gr.Column():
@@ -361,14 +764,15 @@ def build_ui() -> gr.Blocks:
                                     label="Generated Riddle",
                                     lines=10,
                                     interactive=False,
-                                    buttons=["copy"],
+                                    elem_id="riddle-card",
                                 )
+                                copy_riddle_btn = gr.Button("Copy Riddle")
                                 correct_hint = gr.Textbox(
-                                    label="Correct Answer (sender only)",
+                                    label="[ SECURE DATA: CORRECT ANSWER ]",
                                     interactive=False,
                                 )
                                 encrypt_error = gr.Textbox(
-                                    label="Status",
+                                    label="[ SYSTEM STATUS ]",
                                     interactive=False,
                                     visible=False,
                                 )
@@ -396,44 +800,60 @@ def build_ui() -> gr.Blocks:
                             ],
                         )
 
+                        copy_riddle_btn.click(
+                            fn=None,
+                            js="""() => {
+                                const ta = document.querySelector('#riddle-card textarea, #riddle-card input');
+                                if (!ta) return;
+                                navigator.clipboard.writeText(ta.value).catch(() => {
+                                    const orig = ta.readOnly;
+                                    ta.readOnly = false;
+                                    ta.select();
+                                    document.execCommand('copy');
+                                    ta.readOnly = orig;
+                                    ta.blur();
+                                });
+                            }""",
+                        )
+
                     # ---------------- Solve ----------------
                     with gr.Tab("Solve"):
                         with gr.Row():
                             with gr.Column():
                                 paste_input = gr.Textbox(
-                                    label="Paste a riddle card",
+                                    label="[ INPUT: PASTE RIDDLE CARD ]",
                                     placeholder="Paste the shared riddle here...",
                                     lines=10,
                                 )
-                                parse_btn = gr.Button("Parse Riddle")
+                                parse_btn = gr.Button("> PARSE RIDDLE")
 
                         with gr.Row(visible=False) as solve_output_row:
                             with gr.Column():
                                 riddle_display = gr.Textbox(
-                                    label="Riddle",
+                                    label="[ DECIPHERING: RIDDLE ]",
                                     lines=5,
                                     interactive=False,
                                 )
                                 solve_options = gr.Radio(
-                                    label="Choose your answer",
+                                    label="[ SELECT ANSWER ]",
                                     choices=[],
                                     interactive=True,
                                 )
                                 solve_feedback = gr.Textbox(
-                                    label="Result",
+                                    label="[ DECRYPTION RESULT ]",
                                     interactive=False,
                                 )
                                 solve_reveal = gr.Textbox(
-                                    label="Reveal",
+                                    label="[ REVEALED ANSWER DATA ]",
                                     interactive=False,
                                 )
                                 solve_state = gr.Textbox(visible=False)
                                 solve_attempts = gr.Textbox(
-                                    label="Attempts",
+                                    label="[ ATTACK ATTEMPTS ]",
                                     interactive=False,
                                     visible=False,
                                 )
-                                next_btn = gr.Button("Decrypt another?")
+                                next_btn = gr.Button("> DECRYPT ANOTHER?")
 
                         def on_parse(card: str):
                             riddle, opts_json, err, state = parse_riddle_card(card)
@@ -469,7 +889,7 @@ def build_ui() -> gr.Blocks:
                             ],
                         )
 
-                        def on_answer(selected: str, state: str) -> tuple:
+                        def on_answer(selected: Union[str, None], state: str) -> tuple:
                             if not selected:
                                 return "", "", state
                             idx = ord(selected.split(")")[0]) - ord("A")
@@ -494,67 +914,69 @@ def build_ui() -> gr.Blocks:
                     with gr.Tab("Challenge"):
                         with gr.Row():
                             with gr.Column():
-                                gr.Markdown("## Challenge Mode")
-                                gr.Markdown("Solve as many riddles as you can before time runs out.")
+                                gr.Markdown("## > CHALLENGE PROTOCOL")
+                                gr.Markdown(
+                                    "Execute decryption sequences. Complete as many nodes as possible before terminal lockout."
+                                )
                                 theme_filter = gr.Dropdown(
                                     choices=[("All", "All")]
                                     + [(label, key) for key, label in THEME_LABELS.items() if key != "surprise"],
                                     value="All",
-                                    label="Theme Filter",
+                                    label="[ PARAM: THEME FILTER ]",
                                 )
-                                start_btn = gr.Button("Start Game")
+                                start_btn = gr.Button("> START GAME")
 
                         with gr.Row(visible=False) as game_row:
                             with gr.Column():
                                 timer_display = gr.Textbox(
-                                    label="Time Remaining",
+                                    label="[ TIMER: TIME REMAINING ]",
                                     value="10:00",
                                     interactive=False,
                                     elem_id="timer-display",
                                 )
                                 score_display = gr.Textbox(
-                                    label="Score",
+                                    label="[ ACCOUNT: SCORE ]",
                                     value="0",
                                     interactive=False,
                                 )
                                 streak_display = gr.Textbox(
-                                    label="Streak",
+                                    label="[ STATUS: STREAK ]",
                                     value="0",
                                     interactive=False,
                                 )
                                 challenge_riddle = gr.Textbox(
-                                    label="Riddle",
+                                    label="[ ACTIVE RIDDLE ]",
                                     lines=5,
                                     interactive=False,
                                 )
                                 challenge_options = gr.Radio(
-                                    label="Choose",
+                                    label="[ CHOOSE SOLUTION ]",
                                     choices=[],
                                     interactive=True,
                                 )
                                 challenge_feedback = gr.Textbox(
-                                    label="Feedback",
+                                    label="[ COMMAND FEEDBACK ]",
                                     interactive=False,
                                 )
                                 challenge_correct = gr.Textbox(
-                                    label="Correct Answer",
+                                    label="[ REVEALED SOLUTION ]",
                                     interactive=False,
                                     visible=False,
                                 )
-                                next_challenge_btn = gr.Button("Next Riddle")
-                                end_game_btn = gr.Button("End Game")
+                                next_challenge_btn = gr.Button("> NEXT RIDDLE")
+                                end_game_btn = gr.Button("> END GAME")
 
                         with gr.Row(visible=False) as game_over_row:
                             with gr.Column():
                                 final_score = gr.Textbox(
-                                    label="Final Score",
+                                    label="[ SUMMARY: FINAL SCORE ]",
                                     interactive=False,
                                 )
-                                new_game_btn = gr.Button("New Game")
+                                new_game_btn = gr.Button("> NEW GAME")
 
-                        # Game state is stored in a simple hidden textbox for now
-                        game_state = gr.Textbox(visible=False)
-                        answer_time_left = gr.Textbox(visible=False)
+                        # State is bridged through localStorage; state_buffer holds temporary JSON
+                        state_bridge = gr.Textbox(visible=False)
+                        answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
 
                         with gr.Row(visible=False):
                             game_over_trigger = gr.Button(
@@ -591,11 +1013,15 @@ def build_ui() -> gr.Blocks:
                                 score_display: "0",
                                 streak_display: "0",
                                 timer_display: f"{DEFAULT_GAME_DURATION_MINUTES:02d}:00",
-                                game_state: state,
+                                state_bridge: state,
                             }
 
-                        def on_game_over(state: str) -> tuple:
+                        def on_game_over(state: str) -> GameOverResult:
                             """Handle game over when the timer expires.
+
+                            This function takes the current JSON-encoded state, marks the game as inactive,
+                            sets remaining time to zero, and prepares the UI transition to the game over screen.
+                            It also extracts the final score to be displayed.
 
                             Parameters
                             ----------
@@ -604,35 +1030,48 @@ def build_ui() -> gr.Blocks:
 
                             Returns
                             -------
-                            tuple
-                                Updates for ``timer_display``, ``game_state``,
-                                ``game_row``, ``game_over_row``, and
-                                ``final_score``.
+                            GameOverResult
+                                Custom result object containing timer display, game state, final score, and UI visibility
+                                updates.
                             """
                             if not state:
-                                return "00:00", "", gr.update(visible=False), gr.update(visible=True), "0"
+                                return GameOverResult("00:00", "", gr.update(visible=False), gr.update(visible=True), "0")
                             st = json.loads(state)
                             st["game_active"] = False
                             st["time_left"] = 0
-                            return (
+                            final_score_value = str(st.get("score", 0))
+                            return GameOverResult(
                                 "00:00",
                                 json.dumps(st),
                                 gr.update(visible=False),
                                 gr.update(visible=True),
-                                str(st.get("score", 0)),
+                                gr.update(value=final_score_value),
                             )
 
                         game_over_trigger.click(
                             on_game_over,
-                            inputs=game_state,
+                            inputs=[state_bridge],
                             outputs=[
                                 timer_display,
-                                game_state,
+                                state_bridge,
                                 game_row,
                                 game_over_row,
                                 final_score,
                             ],
-                            js="""(state) => { window.stopGameTimer(); return state; }""",
+                            js="""() => {
+                                window.stopGameTimer();
+                                return [JSON.stringify(window.readGameState())];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
                         )
 
                         start_btn.click(
@@ -648,37 +1087,48 @@ def build_ui() -> gr.Blocks:
                                 score_display,
                                 streak_display,
                                 timer_display,
-                                game_state,
+                                state_bridge,
                             ],
                             js=f"""(theme) => {{
                                 window.startGameTimer({DEFAULT_GAME_DURATION_MINUTES * 60});
                                 return theme;
                             }}""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
                         )
 
                         def on_challenge_answer(
-                            selected: str, state: str, current_time_left: int
-                        ) -> tuple:
+                            selected: Union[str, None], state: str, current_time_left: Union[str, int]
+                        ) -> ChallengeAnswerResult:
+                            try:
+                                current_time_left_int = int(current_time_left)
+                            except (ValueError, TypeError):
+                                current_time_left_int = 0
+
                             if not selected or not state:
-                                return (
-                                    "",
-                                    gr.update(visible=False),
-                                    state,
-                                    gr.update(),
-                                    gr.update(),
-                                    gr.update(),
+                                return ChallengeAnswerResult(
+                                    "", gr.update(visible=False), state, gr.update(), "", ""
                                 )
-                            current_time_left = int(current_time_left)
+
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
-                            st["time_left"] = current_time_left
+                            st["time_left"] = current_time_left_int
+
                             if idx == correct_idx:
                                 points = POINTS_PER_CORRECT
                                 st["streak"] += 1
                                 streak_bonus = st["streak"] * STREAK_BONUS_POINTS
                                 speed_bonus = 0
-                                elapsed = int(st.get("riddle_start_time", current_time_left)) - current_time_left
+                                elapsed = int(st.get("riddle_start_time", current_time_left_int)) - current_time_left_int
                                 if elapsed <= SPEED_BONUS_SECONDS:
                                     speed_bonus = SPEED_BONUS_POINTS
                                 total_points = points + streak_bonus + speed_bonus
@@ -688,7 +1138,7 @@ def build_ui() -> gr.Blocks:
                                     fb += f" + {speed_bonus} speed)"
                                 else:
                                     fb += ")"
-                                return (
+                                return ChallengeAnswerResult(
                                     fb,
                                     gr.update(value="", visible=False),
                                     json.dumps(st),
@@ -700,7 +1150,7 @@ def build_ui() -> gr.Blocks:
                                 st["streak"] = 0
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
-                                return (
+                                return ChallengeAnswerResult(
                                     fb,
                                     gr.update(value=reveal, visible=True),
                                     json.dumps(st),
@@ -709,31 +1159,64 @@ def build_ui() -> gr.Blocks:
                                     str(st["streak"]),
                                 )
 
-                        challenge_options.change(
+                        challenge_options.select(
                             on_challenge_answer,
-                            inputs=[challenge_options, game_state, answer_time_left],
-                            outputs=[challenge_feedback, challenge_correct, game_state, challenge_options, score_display, streak_display],
+                            inputs=[challenge_options, state_bridge, answer_time_left],
+                            outputs=[challenge_feedback, challenge_correct, state_bridge, challenge_options, score_display, streak_display],
                             js="""(selected, state, _) => {
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
                                     : 0;
-                                return [selected, state, remainingSec];
+                                return [selected, JSON.stringify(window.readGameState()), remainingSec];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
                             }""",
                         )
 
-                        def on_next_challenge(state: str, current_time_left: int) -> tuple:
+                        def on_next_challenge(state: str, current_time_left: Union[str, int]) -> NextChallengeResult:
+                            """Generate the next riddle challenge and update game state.
+
+                            This function parses the current state, generates a new challenge riddle
+                            for the current theme, resets/records the starting time for this riddle,
+                            and returns the updated options and state.
+
+                            Parameters
+                            ----------
+                            state : str
+                                JSON-serialized string representing the current game state.
+                            current_time_left : Union[str, int]
+                                The time remaining in the game.
+
+                            Returns
+                            -------
+                            NextChallengeResult
+                                Custom result object containing the new riddle, options update, cleared feedback,
+                                cleared reveal message, and the updated game state.
+                            """
+                            try:
+                                current_time_left_int = int(current_time_left)
+                            except (ValueError, TypeError):
+                                current_time_left_int = 0
+
                             if not state:
-                                return "", "", [], "", state
-                            current_time_left = int(current_time_left)
+                                return NextChallengeResult("", "", [], "", state)
                             st = json.loads(state)
                             if not st.get("game_active", False):
-                                return "", "", [], "", state
-                            st["time_left"] = current_time_left
+                                return NextChallengeResult("", "", [], "", state)
+                            st["time_left"] = current_time_left_int
                             riddle, opts, correct = generate_challenge_riddle(st["theme"])
                             options = json.loads(opts)
                             st["correct_index"] = int(correct)
-                            st["riddle_start_time"] = current_time_left
-                            return (
+                            st["riddle_start_time"] = current_time_left_int
+                            return NextChallengeResult(
                                 riddle,
                                 gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
@@ -747,32 +1230,57 @@ def build_ui() -> gr.Blocks:
 
                         next_challenge_btn.click(
                             on_next_challenge,
-                            inputs=[game_state, answer_time_left],
+                            inputs=[state_bridge, answer_time_left],
                             outputs=[
                                 challenge_riddle,
                                 challenge_options,
                                 challenge_feedback,
                                 challenge_correct,
-                                game_state,
+                                state_bridge,
                             ],
-                            js="""(state, _) => {
+                            js="""(_) => {
                                 window.riddleStartTime = Date.now();
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
                                     : 0;
-                                return [state, remainingSec];
+                                return [JSON.stringify(window.readGameState()), remainingSec];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
                             }""",
                         )
 
                         end_game_btn.click(
-                            lambda state: {
-                                game_row: gr.update(visible=False),
-                                game_over_row: gr.update(visible=True),
-                                final_score: json.loads(state).get("score", 0) if state else "0",
-                            },
-                            inputs=game_state,
-                            outputs=[game_row, game_over_row, final_score],
-                            js="""(state) => { window.stopGameTimer(); return state; }""",
+                            on_game_over,
+                            inputs=[state_bridge],
+                            outputs=[
+                                timer_display,
+                                state_bridge,
+                                game_row,
+                                game_over_row,
+                                final_score,
+                            ],
+                            js="""() => {
+                                window.stopGameTimer();
+                                return [JSON.stringify(window.readGameState())];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
                         )
 
                         new_game_btn.click(
@@ -786,30 +1294,33 @@ def build_ui() -> gr.Blocks:
 
                     # ---------------- About ----------------
                     with gr.Tab("About"):
-                        gr.Markdown("""
-                        ## Alien Obfuscator
+                        gr.Markdown(
+                            """
+                        ## > SYSTEM SPECIFICATION: ALIEN OBFUSCATOR v1.0
 
-                        Built for the **Hugging Face Build Small Hackathon**.
+                        ROBCO INDUSTRIES DEFENSE PROTOCOL (SECURE PORT)
 
-                        ### How to Play
-                        1. **Encrypt** — Type a secret message and pick a theme.
-                           The AI will generate a riddle that only humans can solve.
-                        2. **Solve** — Paste a friend's riddle and guess the answer.
-                        3. **Challenge** — Race against the clock to solve as many as you can.
+                        ### OPERATION DIRECTIVES
+                        1. **[ ENCRYPT ]** — Input plaintext message and select theme cipher.
+                           The cryptographic engine will construct a human-resolvable riddle.
+                        2. **[ SOLVE ]** — Paste target riddle card and process decryption.
+                        3. **[ CHALLENGE ]** — Race against the system timer to solve multiple nodes.
 
-                        ### Technology
-                        - Gradio UI
-                        - LLM-powered riddle generation
-                        - Curated public-domain corpus
+                        ### HARDWARE ARCHITECTURE
+                        - User Interface: Gradio Monospace TUI Terminal
+                        - Decryption Engine: LLM-powered multi-modal cipher generation
+                        - Local Database: Curated public-domain text corpus
 
-                        ### Parameter Budget
-                        - Primary LLM: up to 31B parameters
-                        - Total: ≤ 32B
-                        """)
+                        ### RESOURCE BUDGET
+                        - Primary Core: up to 31 Billion parameters
+                        - System Allocation: ≤ 32 Billion parameters total
+                        """
+                        )
 
-    return demo
+        return demo
 
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch(server_name=LAUNCH_SERVER_NAME, server_port=LAUNCH_SERVER_PORT, share=LAUNCH_SHARE)
+    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML
+    app.launch(css=FALLOUT_CSS, head=head_html_content)

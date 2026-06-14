@@ -80,9 +80,7 @@ MAX_PARAMETERS: Final[int] = _models_cfg.get("max_parameters", 32_000_000_000)
 _backends_cfg: dict[str, Any] = _cfg.get("backends", {})
 HF_DEFAULT_MODEL: Final[str] = _backends_cfg.get("hf", {}).get("default_model", "google/gemma-4-31b-it")
 HF_API_TIMEOUT: Final[int] = _backends_cfg.get("hf", {}).get("timeout", 30)
-OPENROUTER_DEFAULT_MODEL: Final[str] = _backends_cfg.get("openrouter", {}).get(
-    "default_model", "google/gemma-4-31b-it"
-)
+OPENROUTER_DEFAULT_MODEL: Final[str] = _backends_cfg.get("openrouter", {}).get("default_model", "google/gemma-4-31b-it")
 OPENROUTER_URL: Final[str] = _backends_cfg.get("openrouter", {}).get(
     "url", "https://openrouter.ai/api/v1/chat/completions"
 )
