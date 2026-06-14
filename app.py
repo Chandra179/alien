@@ -327,7 +327,12 @@ def build_ui() -> gr.Blocks:
     gr.Blocks
         The fully assembled Gradio interface.
     """
-    with gr.Blocks(title="Alien Obfuscator", head=TIMER_HTML) as demo:
+    DISABLED_RADIO_CSS = """
+    input[type="radio"]:disabled {
+        opacity: 0.35;
+    }
+    """
+    with gr.Blocks(title="Alien Obfuscator", head=TIMER_HTML, css=DISABLED_RADIO_CSS) as demo:
         gr.Markdown(f"# {APP_TITLE}")
 
         with gr.Row():
@@ -579,6 +584,7 @@ def build_ui() -> gr.Blocks:
                                 challenge_options: gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
                                     value=None,
+                                    interactive=True,
                                 ),
                                 challenge_feedback: "",
                                 challenge_correct: gr.update(visible=False),
@@ -654,7 +660,15 @@ def build_ui() -> gr.Blocks:
                             selected: str, state: str, current_time_left: int
                         ) -> tuple:
                             if not selected or not state:
-                                return "", "", state, gr.update(visible=False)
+                                return (
+                                    "",
+                                    gr.update(visible=False),
+                                    state,
+                                    gr.update(),
+                                    gr.update(),
+                                    gr.update(),
+                                )
+                            current_time_left = int(current_time_left)
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
@@ -664,7 +678,7 @@ def build_ui() -> gr.Blocks:
                                 st["streak"] += 1
                                 streak_bonus = st["streak"] * STREAK_BONUS_POINTS
                                 speed_bonus = 0
-                                elapsed = st.get("riddle_start_time", current_time_left) - current_time_left
+                                elapsed = int(st.get("riddle_start_time", current_time_left)) - current_time_left
                                 if elapsed <= SPEED_BONUS_SECONDS:
                                     speed_bonus = SPEED_BONUS_POINTS
                                 total_points = points + streak_bonus + speed_bonus
@@ -674,17 +688,31 @@ def build_ui() -> gr.Blocks:
                                     fb += f" + {speed_bonus} speed)"
                                 else:
                                     fb += ")"
-                                reveal = ""
+                                return (
+                                    fb,
+                                    gr.update(value="", visible=False),
+                                    json.dumps(st),
+                                    gr.update(interactive=False),
+                                    str(st["score"]),
+                                    str(st["streak"]),
+                                )
                             else:
                                 st["streak"] = 0
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
-                            return fb, reveal, json.dumps(st), gr.update(visible=True)
+                                return (
+                                    fb,
+                                    gr.update(value=reveal, visible=True),
+                                    json.dumps(st),
+                                    gr.update(interactive=False),
+                                    str(st["score"]),
+                                    str(st["streak"]),
+                                )
 
                         challenge_options.change(
                             on_challenge_answer,
                             inputs=[challenge_options, game_state, answer_time_left],
-                            outputs=[challenge_feedback, challenge_correct, game_state, challenge_correct],
+                            outputs=[challenge_feedback, challenge_correct, game_state, challenge_options, score_display, streak_display],
                             js="""(selected, state, _) => {
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
@@ -696,6 +724,7 @@ def build_ui() -> gr.Blocks:
                         def on_next_challenge(state: str, current_time_left: int) -> tuple:
                             if not state:
                                 return "", "", [], "", state
+                            current_time_left = int(current_time_left)
                             st = json.loads(state)
                             if not st.get("game_active", False):
                                 return "", "", [], "", state
@@ -709,6 +738,7 @@ def build_ui() -> gr.Blocks:
                                 gr.update(
                                     choices=[f"{chr(65 + i)}) {o}" for i, o in enumerate(options)],
                                     value=None,
+                                    interactive=True,
                                 ),
                                 "",
                                 "",
