@@ -73,10 +73,11 @@ def test_challenge_handlers() -> None:
     assert reveal == res_ans.reveal
 
     # Verify that calling on_game_over with the updated state (after correct answer)
-    # returns the updated score.
+    # returns the updated state including the score.
     res_go_correct = on_game_over_fn(res_ans.updated_state)
     assert isinstance(res_go_correct, GameOverResult)
-    assert int(res_go_correct.final_score) == st["score"]
+    st_go_correct = json.loads(res_go_correct.state_json)
+    assert st_go_correct["score"] == st["score"]
 
     # 2. Test on_challenge_answer with integer current_time_left
     res_ans_wrong = on_challenge_answer_fn("B) Option B", state_str, 115)
@@ -105,13 +106,14 @@ def test_challenge_handlers() -> None:
     res_go = on_game_over_fn(state_str)
     assert isinstance(res_go, GameOverResult)
     assert res_go.timer_display == "00:00"
-    st_go = json.loads(res_go.game_state)
+    st_go = json.loads(res_go.state_json)
     assert st_go["game_active"] is False
     assert st_go["time_left"] == 0
-    assert res_go.final_score == "10"
+    st_go = json.loads(res_go.state_json)
+    assert st_go["score"] == 10
 
     # Unpack to verify tuple unpacking compatibility
-    timer_display, game_state_val, game_row_val, game_over_row_val, final_score_val = res_go
+    timer_display, state_json_val, game_row_val, game_over_row_val, final_score_val = res_go
     assert timer_display == "00:00"
 
     # 5. Verify that both "Game Over" trigger and "End Game" buttons are wired to on_game_over

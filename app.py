@@ -103,6 +103,24 @@ TIMER_HTML = """
             clearInterval(window.gameTimerInterval);
         }
     };
+
+    window.readGameState = function() {
+        return {
+            score: parseInt(localStorage.getItem('game_score') || '0'),
+            streak: parseInt(localStorage.getItem('game_streak') || '0'),
+            time_left: parseInt(localStorage.getItem('game_time_left') || '0'),
+            correct_index: parseInt(localStorage.getItem('game_correct_index') || '0'),
+            theme: localStorage.getItem('game_theme') || 'All',
+            riddle_start_time: parseInt(localStorage.getItem('game_riddle_start_time') || '0'),
+            game_active: localStorage.getItem('game_active') === 'true'
+        };
+    };
+
+    window.writeGameState = function(st) {
+        for (var key in st) {
+            localStorage.setItem('game_' + key, String(st[key]));
+        }
+    };
 })();
 </script>
 """
@@ -151,7 +169,7 @@ body::before {
     position: fixed;
     top: 0; left: 0; bottom: 0; right: 0;
     background: linear-gradient(
-        rgba(18, 16, 16, 0) 50%, 
+        rgba(18, 16, 16, 0) 50%,
         rgba(0, 0, 0, 0.22) 50%
     );
     background-size: 100% 4px;
@@ -317,7 +335,7 @@ button:disabled, .gr-button:disabled {
     color: var(--terminal-color) !important;
 }
 
-#game-state-input, #answer-time-left {
+#answer-time-left {
     display: none !important;
 }
 """
@@ -540,21 +558,21 @@ class GameOverResult(NamedTuple):
     ----------
     timer_display : str
         Display string for the timer, typically set to "00:00".
-    game_state : str
+    state_json : str
         JSON-encoded game state.
     game_row : Any
         Gradio update dict for the game row visibility.
     game_over_row : Any
         Gradio update dict for the game over row visibility.
-    final_score : str
-        The final score as a string.
+    final_score : Any
+        The final score component.
     """
 
     timer_display: str
-    game_state: str
+    state_json: str
     game_row: Any
     game_over_row: Any
-    final_score: str
+    final_score: Any
 
 
 class ChallengeAnswerResult(NamedTuple):
@@ -579,9 +597,8 @@ class ChallengeAnswerResult(NamedTuple):
     """
 
     feedback: str
-    reveal: str
+    correct_update: Any  # Combines both value and visibility properties
     updated_state: str
-    visibility_update: Any
     interactive_update: Any
     score_update: str
     streak_update: str
@@ -718,7 +735,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             root.style.setProperty('--terminal-border-dim', '#aaaaaa');
                         }
                         return color;
-                    }"""
+                    }""",
                 )
                 with gr.Tabs():
                     # ---------------- Encrypt ----------------
@@ -852,7 +869,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             ],
                         )
 
-                        def on_answer(selected: str, state: str) -> tuple:
+                        def on_answer(selected: Union[str, None], state: str) -> tuple:
                             if not selected:
                                 return "", "", state
                             idx = ord(selected.split(")")[0]) - ord("A")
@@ -937,8 +954,8 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 )
                                 new_game_btn = gr.Button("> NEW GAME")
 
-                        # Game state is stored in a simple hidden textbox for now
-                        game_state = gr.Textbox(visible=True, elem_id="game-state-input")
+                        # State is bridged through localStorage; state_buffer holds temporary JSON
+                        state_bridge = gr.Textbox(visible=False)
                         answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
 
                         with gr.Row(visible=False):
@@ -976,7 +993,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 score_display: "0",
                                 streak_display: "0",
                                 timer_display: f"{DEFAULT_GAME_DURATION_MINUTES:02d}:00",
-                                game_state: state,
+                                state_bridge: state,
                             }
 
                         def on_game_over(state: str) -> GameOverResult:
@@ -984,6 +1001,7 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                             This function takes the current JSON-encoded state, marks the game as inactive,
                             sets remaining time to zero, and prepares the UI transition to the game over screen.
+                            It also extracts the final score to be displayed.
 
                             Parameters
                             ----------
@@ -993,35 +1011,47 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                             Returns
                             -------
                             GameOverResult
-                                Custom result object containing timer display, game state, UI visibility
-                                updates, and the final score.
+                                Custom result object containing timer display, game state, final score, and UI visibility
+                                updates.
                             """
                             if not state:
-                                return GameOverResult(
-                                    "00:00", "", gr.update(visible=False), gr.update(visible=True), "0"
-                                )
+                                return GameOverResult("00:00", "", gr.update(visible=False), gr.update(visible=True), "0")
                             st = json.loads(state)
                             st["game_active"] = False
                             st["time_left"] = 0
+                            final_score_value = str(st.get("score", 0))
                             return GameOverResult(
                                 "00:00",
                                 json.dumps(st),
                                 gr.update(visible=False),
                                 gr.update(visible=True),
-                                str(st.get("score", 0)),
+                                gr.update(value=final_score_value),
                             )
 
                         game_over_trigger.click(
                             on_game_over,
-                            inputs=game_state,
+                            inputs=[state_bridge],
                             outputs=[
                                 timer_display,
-                                game_state,
+                                state_bridge,
                                 game_row,
                                 game_over_row,
                                 final_score,
                             ],
-                            js="""(state) => { window.stopGameTimer(); return state; }""",
+                            js="""() => {
+                                window.stopGameTimer();
+                                return [JSON.stringify(window.readGameState())];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
                         )
 
                         start_btn.click(
@@ -1037,50 +1067,42 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 score_display,
                                 streak_display,
                                 timer_display,
-                                game_state,
+                                state_bridge,
                             ],
                             js=f"""(theme) => {{
                                 window.startGameTimer({DEFAULT_GAME_DURATION_MINUTES * 60});
                                 return theme;
                             }}""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
                         )
 
                         def on_challenge_answer(
-                            selected: str, state: str, current_time_left: Union[str, int]
+                            selected: Union[str, None], state: str, current_time_left: Union[str, int]
                         ) -> ChallengeAnswerResult:
-                            """Handle the submission of a challenge answer and update game state.
-
-                            This function takes the selected answer, current JSON-encoded state,
-                            and the remaining time. It parses the selected option, verifies it against
-                            the correct option, calculates base points, streak bonuses, and speed bonuses,
-                            and updates the state object before returning the feedback and updated state.
-
-                            Parameters
-                            ----------
-                            selected : str
-                                The option selected by the user (e.g., 'A) ...').
-                            state : str
-                                JSON-serialized string representing the current game state.
-                            current_time_left : Union[str, int]
-                                The time remaining in the game at the moment of submission.
-
-                            Returns
-                            -------
-                            ChallengeAnswerResult
-                                Custom result object containing feedback, reveal message, updated game state,
-                                solution visibility update, interaction states, and score/streak updates.
-                            """
                             try:
                                 current_time_left_int = int(current_time_left)
                             except (ValueError, TypeError):
                                 current_time_left_int = 0
 
                             if not selected or not state:
-                                return ChallengeAnswerResult("", "", state, gr.update(visible=False), gr.update(), "", "")
+                                return ChallengeAnswerResult(
+                                    "", gr.update(visible=False), state, gr.update(), "", ""
+                                )
+
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
                             correct_idx = st["correct_index"]
                             st["time_left"] = current_time_left_int
+
                             if idx == correct_idx:
                                 points = POINTS_PER_CORRECT
                                 st["streak"] += 1
@@ -1101,33 +1123,42 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                                 st["streak"] = 0
                                 fb = f"Wrong! The answer was {chr(65 + correct_idx)}."
                                 reveal = f"Correct: {chr(65 + correct_idx)}"
+
                             return ChallengeAnswerResult(
-                                fb,
-                                reveal,
-                                json.dumps(st),
-                                gr.update(visible=True),
-                                gr.update(interactive=False),
-                                str(st.get("score", 0)),
-                                str(st.get("streak", 0)),
+                                feedback=fb,
+                                correct_update=gr.update(value=reveal, visible=True),
+                                updated_state=json.dumps(obj=st),
+                                interactive_update=gr.update(interactive=False),
+                                score_update=str(st.get("score", 0)),
+                                streak_update=str(st.get("streak", 0)),
                             )
 
-                        challenge_options.change(
+                        challenge_options.select(
                             on_challenge_answer,
-                            inputs=[challenge_options, game_state, answer_time_left],
+                            inputs=[challenge_options, state_bridge, answer_time_left],
                             outputs=[
                                 challenge_feedback,
-                                challenge_correct,
-                                game_state,
-                                challenge_correct,
+                                challenge_correct,  # Maps cleanly to correct_update
+                                state_bridge,
                                 challenge_options,
                                 score_display,
                                 streak_display,
                             ],
-                            js="""(selected, state, _) => {
+                            js="""(selected, _) => {
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
                                     : 0;
-                                return [selected, state, remainingSec];
+                                return [selected, JSON.stringify(window.readGameState()), remainingSec];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
                             }""",
                         )
 
@@ -1180,34 +1211,57 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                         next_challenge_btn.click(
                             on_next_challenge,
-                            inputs=[game_state, answer_time_left],
+                            inputs=[state_bridge, answer_time_left],
                             outputs=[
                                 challenge_riddle,
                                 challenge_options,
                                 challenge_feedback,
                                 challenge_correct,
-                                game_state,
+                                state_bridge,
                             ],
-                            js="""(state, _) => {
+                            js="""(_) => {
                                 window.riddleStartTime = Date.now();
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))
                                     : 0;
-                                return [state, remainingSec];
+                                return [JSON.stringify(window.readGameState()), remainingSec];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
                             }""",
                         )
 
                         end_game_btn.click(
                             on_game_over,
-                            inputs=game_state,
+                            inputs=[state_bridge],
                             outputs=[
                                 timer_display,
-                                game_state,
+                                state_bridge,
                                 game_row,
                                 game_over_row,
                                 final_score,
                             ],
-                            js="""(state) => { window.stopGameTimer(); return state; }""",
+                            js="""() => {
+                                window.stopGameTimer();
+                                return [JSON.stringify(window.readGameState())];
+                            }""",
+                        ).then(
+                            lambda x: x,
+                            inputs=state_bridge,
+                            outputs=state_bridge,
+                            js="""(state_json) => {
+                                try {
+                                    window.writeGameState(JSON.parse(state_json));
+                                } catch (e) {}
+                                return state_json;
+                            }""",
                         )
 
                         new_game_btn.click(
@@ -1221,9 +1275,10 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
 
                     # ---------------- About ----------------
                     with gr.Tab("About"):
-                        gr.Markdown("""
+                        gr.Markdown(
+                            """
                         ## > SYSTEM SPECIFICATION: ALIEN OBFUSCATOR v1.0
-                        
+
                         ROBCO INDUSTRIES DEFENSE PROTOCOL (SECURE PORT)
 
                         ### OPERATION DIRECTIVES
@@ -1240,9 +1295,10 @@ COPYRIGHT 2075-2077 ROBCO INTERNATIONAL
                         ### RESOURCE BUDGET
                         - Primary Core: up to 31 Billion parameters
                         - System Allocation: ≤ 32 Billion parameters total
-                        """)
+                        """
+                        )
 
-    return demo
+        return demo
 
 
 if __name__ == "__main__":
