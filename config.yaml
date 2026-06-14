@@ -23,6 +23,9 @@ backends:
     default_model: "mimo-v2.5"
     url: "https://opencode.ai/zen/go/v1/chat/completions"
     timeout: 120
+  modal:
+    default_model: "google/gemma-4-31b-it"
+    timeout: 300
 
 llm:
   temperature: 0.8

@@ -22,6 +22,7 @@ from alien_obfuscator.config import (
     LAUNCH_SERVER_PORT,
     LAUNCH_SHARE,
     MAX_PLAINTEXT_LENGTH,
+    MODAL_DEFAULT_MODEL,
     NUM_OPTIONS,
     OPENCODE_GO_DEFAULT_MODEL,
     OPENROUTER_DEFAULT_MODEL,
@@ -35,6 +36,7 @@ from alien_obfuscator.config import (
 from alien_obfuscator.riddle_generator import (
     HuggingFaceBackend,
     MockBackend,
+    ModalBackend,
     OpenCodeGoBackend,
     OpenRouterBackend,
     RiddleGenerator,
@@ -55,6 +57,9 @@ elif backend == "openrouter":
 elif backend == "opencode-go":
     model = os.environ.get("OPENCODE_GO_MODEL", OPENCODE_GO_DEFAULT_MODEL)
     _backend = OpenCodeGoBackend(model)
+elif backend == "modal":
+    model = os.environ.get("MODAL_MODEL", MODAL_DEFAULT_MODEL)
+    _backend = ModalBackend(model)
 else:
     _backend = HuggingFaceBackend(HF_DEFAULT_MODEL)
 
