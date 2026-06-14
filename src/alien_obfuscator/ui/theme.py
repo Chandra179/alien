@@ -286,9 +286,6 @@ button:disabled, .gr-button:disabled {
     color: var(--terminal-color) !important;
 }
 
-#answer-time-left {
-    display: none !important;
-}
 """
 
 # ---------------------------------------------------------------------------

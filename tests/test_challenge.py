@@ -66,7 +66,8 @@ def test_challenge_handlers() -> None:
     assert st["streak"] == 3
     assert st["score"] > 10
     assert res_ans.interactive_update is not None
-    assert "interactive" not in res_ans.interactive_update
+    assert res_ans.interactive_update.get("interactive") is False
+    assert "value" not in res_ans.interactive_update
 
     # Unpack to verify tuple unpacking compatibility
     fb, correct_update, updated_state, interactive_update, score_upd, streak_upd = res_ans
@@ -87,7 +88,8 @@ def test_challenge_handlers() -> None:
     assert st_int["time_left"] == 115
     assert st_int["streak"] == 0
     assert res_ans_wrong.interactive_update is not None
-    assert "interactive" not in res_ans_wrong.interactive_update
+    assert res_ans_wrong.interactive_update.get("interactive") is False
+    assert "value" not in res_ans_wrong.interactive_update
 
     # 3. Test on_next_challenge with string current_time_left
     res_nc = on_next_challenge_fn(state_str, "100")

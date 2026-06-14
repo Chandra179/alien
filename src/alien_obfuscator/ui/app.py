@@ -350,7 +350,7 @@ def build_ui() -> gr.Blocks:
 
                         # State is bridged through localStorage; state_buffer holds temporary JSON
                         state_bridge = gr.Textbox(visible=False)
-                        answer_time_left = gr.Textbox(visible=True, elem_id="answer-time-left")
+                        answer_time_left = gr.Textbox(visible=False)
 
                         with gr.Row(visible=False):
                             game_over_trigger = gr.Button(
@@ -516,7 +516,7 @@ def build_ui() -> gr.Blocks:
                                     fb,
                                     gr.update(value="", visible=False),
                                     json.dumps(st),
-                                    gr.update(value=None),
+                                    gr.update(interactive=False),
                                     str(st["score"]),
                                     str(st["streak"]),
                                 )
@@ -528,7 +528,7 @@ def build_ui() -> gr.Blocks:
                                     fb,
                                     gr.update(value=reveal, visible=True),
                                     json.dumps(st),
-                                    gr.update(value=None),
+                                    gr.update(interactive=False),
                                     str(st["score"]),
                                     str(st["streak"]),
                                 )
