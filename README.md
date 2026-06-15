@@ -27,7 +27,7 @@ Built for the **HuggingFace Build Small Hackathon**.
 ## Architecture
 
 - **Gradio** UI with dark sci-fi theming
-- **Modular LLM backend** — Mock (offline) or Hugging Face Inference API
+- **Modular LLM backend** — Mock (offline), Hugging Face Inference API, or Modal (Gemma 4 on H200 GPU)
 - **Corpus Manager** — Curated public-domain excerpts per theme
 - **Riddle Generator** — Prompt builder + JSON schema validation + retry logic
 - **Game Engine** — Timer, scoring, streaks, high-score persistence
@@ -46,6 +46,7 @@ alien-obfuscator/
 ├── src/alien_obfuscator/
 │   ├── config.py           # Constants, model settings, paths
 │   ├── corpus_manager.py   # Loads, selects, caches excerpts
+│   ├── modal_serve.py      # Modal vLLM server (Gemma 4 on H200)
 │   └── riddle_generator.py # Prompt builder + LLM abstraction + validation
 ├── corpus/
 │   ├── greek_myth.txt      # Curated excerpts
@@ -60,6 +61,52 @@ alien-obfuscator/
 ├── pyproject.toml
 └── README.md
 ```
+
+## Modal Deployment (Gemma 4 on GPU)
+
+The app can optionally use a Modal-hosted vLLM server running `google/gemma-4-31b-it` on a single H200 GPU.
+
+### Prerequisites
+
+- Modal account (https://modal.com)
+- Hugging Face token with access to Gemma 4 weights
+
+### Setup
+
+```bash
+# Create Modal secrets
+modal secret create hf-token HF_TOKEN=your_hf_token_here
+```
+
+Verify the config in `config.yaml` — the scaledown window controls idle auto-sleep:
+
+```yaml
+backends:
+  modal:
+    scaledown_window_minutes: 5   # auto-sleep after 5 min idle
+```
+
+### Deploy
+
+```bash
+# Deploy permanently (one-time setup)
+make modal/deploy
+
+# After deployment, check the URL — typically:
+#   https://YOUR_WORKSPACE--modal-gemma-vllmserver-serve.modal.run
+# Set it in .env:
+#   MODAL_API_URL=https://YOUR_WORKSPACE--modal-gemma-vllmserver-serve.modal.run
+```
+
+### Managing the server
+
+```bash
+make modal/stop       # Stop all running containers
+make modal/logs       # View recent logs
+make modal/deploy     # Redeploy after changes
+```
+
+The server auto-sleeps after `scaledown_window_minutes` of idle and auto-wakes on the next request. You only pay for GPU time while processing.
 
 ## Running Locally
 
