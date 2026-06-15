@@ -16,6 +16,8 @@ An alien intelligence monitors all human communications. Resistance fighters enc
 
 Built for the **HuggingFace Build Small Hackathon**.
 
+[![Watch demo](thumb.png)](smal-hack-hf2.mp4)
+
 ## How to Play
 
 1. **Encrypt** — Type a secret message and pick a theme (Greek Myth, Shakespeare, Grimm, Poetry, Chinese Classics). The AI will generate a poetic riddle that only humans can solve.
