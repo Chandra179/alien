@@ -23,7 +23,7 @@ Team HuggingFace:
 - [gdejan100](https://huggingface.co/gdejan100)
 - [huba179](https://huggingface.co/Huba179)
 
-Social Media Post:  
+Social Media Post: [linkedin](https://www.linkedin.com/posts/chandraa17_alien-obfuscator-build-small-hackathon-share-7472299504717864960-Z4eh/?utm_source=share&utm_medium=member_desktop&rcm=ACoAAClgL5wBsZxQHEI7u4036mJ6LCHBciWvt-0)
 
 
 An alien intelligence monitors all human communications. Resistance fighters encode messages as riddles drawn from ancient Earth texts — texts the alien cannot understand because they require *cultural context*, not decryption. The alien *sees* the riddle but can't *get* it. Humans can.
