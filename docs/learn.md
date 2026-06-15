@@ -106,7 +106,98 @@ Models like `google/gemma-4-31b-it` require an **accepted license agreement** on
 | `--max-model-len` | auto | vLLM auto-detects. Gemma 4 → 262144. |
 | `--gpu-memory-utilization` | 0.92 | Leaves headroom for CUDA graphs and KV cache. |
 | `--safetensors-load-strategy` | `prefetch` | Can speed up weight loading on network FS; omitted when on 9P (Modal default). |
+| `--generation-config` | `vllm` | Override model's `generation_config.json` sampling defaults (see Sampling Defaults below). |
+
+### Gemma4-Specific Architecture Notes
+
+- **Heterogeneous head dimensions**: `head_dim=256`, `global_head_dim=512`. This forces the TRITON_ATTN backend to prevent mixed-backend numerical divergence.
+- **Multimodal-bidirectional attention**: causes vLLM to force `--disable_chunked_mm_input` automatically.
+- **Architecture**: resolved as `Gemma4ForConditionalGeneration`.
+- **Context length**: auto-detected as 262,144 tokens.
+- **Chunked prefill**: enabled with `max_num_batched_tokens=8192`.
+
+### Attention Backend
+
+Gemma4's heterogeneous head dimensions trigger automatic selection of `TRITON_ATTN`. vLLM emits a config-time warning and forces this backend:
+
+```
+Gemma4 model has heterogeneous head dimensions (head_dim=256, global_head_dim=512).
+Forcing TRITON_ATTN backend to prevent mixed-backend numerical divergence.
+```
+
+FlashInfer is used only for top-p & top-k sampling (via `topk_topp_sampler.py`), not for attention.
+
+### CUDA Graph Memory Profiling (v0.21.0+)
+
+Since v0.21.0, vLLM profiles CUDA graph memory during startup and subtracts it from the GPU memory budget. The effective `--gpu-memory-utilization` is lower than the nominal value:
+
+- **Nominal**: `--gpu-memory-utilization=0.9200`
+- **Effective**: `0.9145` (i.e., you lose ~0.55pp to CUDA graph overhead)
+- **To maintain the same KV cache size**: increase `--gpu-memory-utilization` to `0.9255`
+- **To disable profiling**: set `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`
+
+### GPU Memory Breakdown (H200, 31B dense)
+
+| Component | Memory |
+|-----------|--------|
+| Model weights | 57.91 GiB |
+| CUDA graphs (actual) | 0.67 GiB |
+| CUDA graphs (estimated) | 0.76 GiB (difference: 13.7%) |
+| Available KV cache | 65.94 GiB |
+| KV cache capacity | 639,184 tokens |
+| Max concurrency (262k-token reqs) | ~2.44x |
+
+### Filesystem & Weight Loading
+
+Modal containers use the **9P** filesystem by default. vLLM's auto-prefetch detection skips 9P because it is not a recognized network filesystem (NFS/Lustre):
+
+```
+Auto-prefetch is disabled because the filesystem (9P) is not a recognized network FS (NFS/Lustre).
+If you want to force prefetching, start vLLM with --safetensors-load-strategy=prefetch.
+```
+
+Weight loading from `huggingface-cache` volume takes ~27.65s for a 58.25 GiB model (2 safetensors shards).
+
+### Sampling Defaults
+
+vLLM warns that the model's `generation_config.json` overrides its built-in defaults:
+
+```
+Default vLLM sampling parameters have been overridden by the model's `generation_config.json`:
+`{'temperature': 1.0, 'top_k': 64, 'top_p': 0.95}`.
+If this is not intended, please relaunch with `--generation-config vllm`.
+```
+
+### Chat Template Detection
+
+vLLM auto-detects the chat template format as `openai`. You can override with `--chat-template-content-format`.
 
 ### Warm-Up
 
 Sending a trivial chat completion query (`[{"role":"user","content":"Hi"}]`) during startup triggers JIT kernel compilation (Triton) for the first-inference shapes. Without this, the first real user request pays a 2-3s latency spike from JIT compilation. Warm-up absorbs this cost before traffic arrives.
+
+**Known JIT compilation gaps during inference** — even after a warm-up query, some Triton kernels compile on first real use:
+- `_compute_slot_mapping_kernel`
+- `kernel_unified_attention`
+
+Each causes a latency spike. Consider extending the warm-up to cover these shapes/configs if consistent tail latency matters.
+
+### Throughput (H200, 31B dense, single request)
+
+| Metric | Value |
+|--------|-------|
+| Avg prompt throughput | 244.6 tok/s |
+| Avg generation throughput | 55.9 tok/s |
+
+### Startup Timeline (cached)
+
+| Phase | Duration |
+|-------|----------|
+| Container init | ~30s |
+| Model load | ~29s |
+| torch.compile (cached) | ~8.8s |
+| Profiling/warmup run | ~0.3s |
+| CUDA graph capture | ~15s |
+| Engine init total | ~117s |
+| Warm-up query | ~7s |
+| **Total to healthy** | **~202s** |

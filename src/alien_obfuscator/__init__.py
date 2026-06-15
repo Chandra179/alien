@@ -2,8 +2,10 @@
 
 from alien_obfuscator.config import MAX_PLAINTEXT_LENGTH, NUM_OPTIONS
 from alien_obfuscator.riddle_generator import (
+    AutoBackend,
     HuggingFaceBackend,
     LLMBackend,
+    LocalGPU4BitBackend,
     MockBackend,
     ModalBackend,
     OpenAICompatibleBackend,
@@ -14,8 +16,10 @@ from alien_obfuscator.riddle_generator import (
 )
 
 __all__ = [
+    "AutoBackend",
     "HuggingFaceBackend",
     "LLMBackend",
+    "LocalGPU4BitBackend",
     "MockBackend",
     "ModalBackend",
     "OpenAICompatibleBackend",

@@ -23,5 +23,7 @@ __all__ = [
 
 if __name__ == "__main__":
     app = build_ui()
-    head_html_content = TIMER_HTML + "\n" + GOOGLE_FONT_HTML + "\n<style id='terminal-theme-css'>" + FALLOUT_CSS + "</style>"
+    head_html_content = (
+        TIMER_HTML + "\n" + GOOGLE_FONT_HTML + "\n<style id='terminal-theme-css'>" + FALLOUT_CSS + "</style>"
+    )
     app.launch(head=head_html_content)

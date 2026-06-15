@@ -409,7 +409,9 @@ def build_ui() -> gr.Blocks:
                                 updates.
                             """
                             if not state:
-                                return GameOverResult("00:00", "", gr.update(visible=False), gr.update(visible=True), "0")
+                                return GameOverResult(
+                                    "00:00", "", gr.update(visible=False), gr.update(visible=True), "0"
+                                )
                             st = json.loads(state)
                             st["active"] = False
                             st["time_left"] = 0
@@ -488,9 +490,7 @@ def build_ui() -> gr.Blocks:
                                 current_time_left_int = 0
 
                             if not selected or not state:
-                                return ChallengeAnswerResult(
-                                    "", gr.update(visible=False), state, gr.update(), "", ""
-                                )
+                                return ChallengeAnswerResult("", gr.update(visible=False), state, gr.update(), "", "")
 
                             idx = ord(selected.split(")")[0]) - ord("A")
                             st = json.loads(state)
@@ -502,7 +502,9 @@ def build_ui() -> gr.Blocks:
                                 st["streak"] += 1
                                 streak_bonus = st["streak"] * STREAK_BONUS_POINTS
                                 speed_bonus = 0
-                                elapsed = int(st.get("riddle_start_time", current_time_left_int)) - current_time_left_int
+                                elapsed = (
+                                    int(st.get("riddle_start_time", current_time_left_int)) - current_time_left_int
+                                )
                                 if elapsed <= SPEED_BONUS_SECONDS:
                                     speed_bonus = SPEED_BONUS_POINTS
                                 total_points = points + streak_bonus + speed_bonus
@@ -536,7 +538,14 @@ def build_ui() -> gr.Blocks:
                         challenge_options.select(
                             on_challenge_answer,
                             inputs=[challenge_options, state_bridge, answer_time_left],
-                            outputs=[challenge_feedback, challenge_correct, state_bridge, challenge_options, score_display, streak_display],
+                            outputs=[
+                                challenge_feedback,
+                                challenge_correct,
+                                state_bridge,
+                                challenge_options,
+                                score_display,
+                                streak_display,
+                            ],
                             js="""(selected, state, _) => {
                                 var remainingSec = window.gameEndTime
                                     ? Math.max(0, Math.floor((window.gameEndTime - Date.now()) / 1000))

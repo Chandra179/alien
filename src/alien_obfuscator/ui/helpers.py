@@ -10,14 +10,20 @@ import os
 from dotenv import load_dotenv
 
 from alien_obfuscator.config import (
+    AUTO_FALLBACK_ORDER,
     DEFAULT_BACKEND,
     HF_DEFAULT_MODEL,
+    LOCAL_DEFAULT_MODEL,
+    LOCAL_QUANTIZE,
+    LOCAL_TIMEOUT,
     MODAL_DEFAULT_MODEL,
     OPENCODE_GO_DEFAULT_MODEL,
     OPENROUTER_DEFAULT_MODEL,
 )
 from alien_obfuscator.riddle_generator import (
+    AutoBackend,
     HuggingFaceBackend,
+    LocalGPU4BitBackend,
     MockBackend,
     ModalBackend,
     OpenCodeGoBackend,
@@ -43,6 +49,16 @@ elif backend == "opencode-go":
 elif backend == "modal":
     model = os.environ.get("MODAL_MODEL", MODAL_DEFAULT_MODEL)
     _backend = ModalBackend(model)
+elif backend == "local":
+    model = os.environ.get("LOCAL_MODEL", LOCAL_DEFAULT_MODEL)
+    quantize = os.environ.get("LOCAL_QUANTIZE", LOCAL_QUANTIZE)
+    _backend = LocalGPU4BitBackend(model, timeout=LOCAL_TIMEOUT, quantize=quantize)
+elif backend == "auto":
+    model = os.environ.get("AUTO_MODEL", MODAL_DEFAULT_MODEL)
+    quantize = os.environ.get("AUTO_QUANTIZE", LOCAL_QUANTIZE)
+    fallback_order_str = os.environ.get("AUTO_FALLBACK_ORDER", AUTO_FALLBACK_ORDER)
+    fallback_order = [s.strip() for s in fallback_order_str.split(",")]
+    _backend = AutoBackend(model, quantize=quantize, fallback_order=fallback_order)
 else:
     _backend = HuggingFaceBackend(HF_DEFAULT_MODEL)
 

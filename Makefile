@@ -41,6 +41,14 @@ modal/run:
 modal/deploy:
 	@uv run modal deploy src/alien_obfuscator/modal_serve.py
 
+.PHONY: modal/stop
+modal/stop:
+	@uv run modal app stop modal-gemma
+
+.PHONY: modal/logs
+modal/logs:
+	@uv run modal app logs modal-gemma 20
+
 .PHONY: deploy/hf
 deploy/hf:
 	hf upload build-small-hackathon/alien-riddle ./ --type space \

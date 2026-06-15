@@ -45,9 +45,7 @@ VLLM_PORT = 8000
 FAST_BOOT = False
 
 vllm_image = (
-    modal.Image.from_registry(
-        "nvidia/cuda:12.9.0-devel-ubuntu24.04", add_python="3.12"
-    )
+    modal.Image.from_registry("nvidia/cuda:12.9.0-devel-ubuntu24.04", add_python="3.12")
     .entrypoint([])
     .uv_pip_install("vllm==0.21.0")
     .add_local_file(str(_LOCAL_CONFIG_PATH), "/opt/config.yaml", copy=True)
@@ -133,11 +131,13 @@ def _warm_up() -> None:
         print("Warning: vLLM did not become healthy within 10 minutes")
         return
 
-    warmup_payload = json.dumps({
-        "model": MODEL_NAME,
-        "messages": [{"role": "user", "content": "Hi"}],
-        "max_tokens": 5,
-    }).encode()
+    warmup_payload = json.dumps(
+        {
+            "model": MODEL_NAME,
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 5,
+        }
+    ).encode()
 
     warmup_req = urllib.request.Request(
         f"http://0.0.0.0:{VLLM_PORT}/v1/chat/completions",
@@ -162,9 +162,7 @@ async def test(test_timeout: int = 15 * MINUTES) -> None:
 
     async with aiohttp.ClientSession(base_url=url) as session:
         print(f"Running health check for server at {url}")
-        async with session.get(
-            "/health", timeout=ClientTimeout(total=test_timeout - 1 * MINUTES)
-        ) as resp:
+        async with session.get("/health", timeout=ClientTimeout(total=test_timeout - 1 * MINUTES)) as resp:
             up = resp.status == 200
         assert up, f"Failed health check for server at {url}"
         print(f"Healthy: {url}")
@@ -173,9 +171,7 @@ async def test(test_timeout: int = 15 * MINUTES) -> None:
         await _send_request(session, "gemma-4-31b", messages)
 
 
-async def _send_request(
-    session: aiohttp.ClientSession, model: str, messages: list[dict[str, str]]
-) -> None:
+async def _send_request(session: aiohttp.ClientSession, model: str, messages: list[dict[str, str]]) -> None:
     payload: dict[str, Any] = {
         "messages": messages,
         "model": model,
@@ -188,25 +184,19 @@ async def _send_request(
         "Accept": "text/event-stream",
     }
 
-    async with session.post(
-        "/v1/chat/completions", json=payload, headers=headers
-    ) as resp:
+    async with session.post("/v1/chat/completions", json=payload, headers=headers) as resp:
         async for raw in resp.content:
             resp.raise_for_status()
             line = raw.decode().strip()
             if not line or line == "data: [DONE]":
                 continue
             if line.startswith("data: "):
-                line = line[len("data: "):]
+                line = line[len("data: ") :]
 
             chunk = json.loads(line)
             assert chunk["object"] == "chat.completion.chunk"
             delta = chunk["choices"][0]["delta"]
-            content = (
-                delta.get("content")
-                or delta.get("reasoning")
-                or delta.get("reasoning_content")
-            )
+            content = delta.get("content") or delta.get("reasoning") or delta.get("reasoning_content")
             if content:
                 print(content, end="")
             else:

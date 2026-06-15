@@ -26,7 +26,14 @@ backends:
   modal:
     default_model: "google/gemma-4-31b-it"
     timeout: 300
-    scaledown_window_minutes: 30
+    scaledown_window_minutes: 5
+  local:
+    default_model: "google/gemma-4-31b-it"
+    timeout: 600
+    quantize: "fp16"
+  auto:
+    timeout: 600
+    fallback_order: "modal,local,mock"
 
 llm:
   temperature: 0.8

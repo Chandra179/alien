@@ -90,10 +90,13 @@ OPENCODE_GO_URL: Final[str] = _backends_cfg.get("opencode-go", {}).get(
     "url", "https://opencode.ai/zen/go/v1/chat/completions"
 )
 OPENCODE_GO_TIMEOUT: Final[int] = _backends_cfg.get("opencode-go", {}).get("timeout", 120)
-MODAL_DEFAULT_MODEL: Final[str] = _backends_cfg.get("modal", {}).get(
-    "default_model", "google/gemma-4-31b-it"
-)
+MODAL_DEFAULT_MODEL: Final[str] = _backends_cfg.get("modal", {}).get("default_model", "google/gemma-4-31b-it")
 MODAL_TIMEOUT: Final[int] = _backends_cfg.get("modal", {}).get("timeout", 300)
+LOCAL_DEFAULT_MODEL: Final[str] = _backends_cfg.get("local", {}).get("default_model", "google/gemma-4-31b-it")
+LOCAL_TIMEOUT: Final[int] = _backends_cfg.get("local", {}).get("timeout", 600)
+LOCAL_QUANTIZE: Final[str] = _backends_cfg.get("local", {}).get("quantize", "fp16")
+AUTO_TIMEOUT: Final[int] = _backends_cfg.get("auto", {}).get("timeout", 600)
+AUTO_FALLBACK_ORDER: Final[str] = _backends_cfg.get("auto", {}).get("fallback_order", "modal,local,mock")
 
 # Challenge phrases
 CHALLENGE_PHRASES: Final[list[str]] = _cfg.get(

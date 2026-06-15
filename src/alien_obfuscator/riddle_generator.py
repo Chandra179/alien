@@ -8,6 +8,7 @@ and retry logic.
 
 import json
 import logging
+import os
 import random
 from abc import ABC, abstractmethod
 from typing import Any
@@ -16,6 +17,8 @@ from alien_obfuscator.config import (
     HF_API_TIMEOUT,
     LLM_MAX_TOKENS,
     LLM_TEMPERATURE,
+    LOCAL_QUANTIZE,
+    LOCAL_TIMEOUT,
     MAX_PLAINTEXT_LENGTH,
     MAX_RETRIES,
     MODAL_TIMEOUT,
@@ -428,9 +431,7 @@ class ModalBackend(OpenAICompatibleBackend):
 
         resolved_url = api_url or os.environ.get("MODAL_API_URL", "")
         if not resolved_url:
-            raise ValueError(
-                "Modal API URL not provided and MODAL_API_URL not set in environment."
-            )
+            raise ValueError("Modal API URL not provided and MODAL_API_URL not set in environment.")
 
         super().__init__(
             model_id=model_id,
@@ -471,9 +472,7 @@ class ModalBackend(OpenAICompatibleBackend):
             "temperature": LLM_TEMPERATURE,
         }
 
-        response = requests.post(
-            self._api_url, headers=headers, json=payload, timeout=self._timeout
-        )
+        response = requests.post(self._api_url, headers=headers, json=payload, timeout=self._timeout)
         if response.status_code != 200:
             logger.error(
                 "%s API error %d: %s",
@@ -481,9 +480,7 @@ class ModalBackend(OpenAICompatibleBackend):
                 response.status_code,
                 response.text,
             )
-            raise RuntimeError(
-                f"{self._provider_name} API error {response.status_code}: {response.text}"
-            )
+            raise RuntimeError(f"{self._provider_name} API error {response.status_code}: {response.text}")
 
         data = response.json()
         choices = data.get("choices", [])
@@ -506,6 +503,285 @@ class ModalBackend(OpenAICompatibleBackend):
             )
             raise RuntimeError(f"{self._provider_name} returned empty content.")
         return content
+
+
+class LocalGPU4BitBackend(LLMBackend):
+    """Backend that runs the model locally on the host GPU using transformers.
+
+    Loads a Hugging Face causal LM at startup and runs inference directly on
+    the local GPU. Supports fp16, bf16, 8-bit, and 4-bit quantization.
+    Designed for Hugging Face Spaces with dedicated GPU hardware
+    (e.g. RTX Pro 6000 with 96 GB VRAM).
+
+    Parameters
+    ----------
+    model_id : str
+        Hugging Face model identifier (e.g. ``"google/gemma-4-31b-it"``).
+    timeout : int
+        Maximum seconds allowed for generation. Default is 600.
+    quantize : str
+        Quantization mode: ``"fp16"``, ``"bf16"``, ``"8bit"``, or ``"4bit"``.
+        Default is ``"fp16"``.
+
+    Raises
+    ------
+    ImportError
+        If ``torch`` or ``transformers`` are not installed.
+    RuntimeError
+        If no CUDA-capable GPU is available or the model fails to load.
+    """
+
+    def __init__(
+        self,
+        model_id: str,
+        timeout: int = LOCAL_TIMEOUT,
+        quantize: str = LOCAL_QUANTIZE,
+    ) -> None:
+        import torch
+
+        self._model_id = model_id
+        self._timeout = timeout
+        self._quantize = quantize
+        self._model = None
+        self._tokenizer = None
+        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        if self._device != "cuda":
+            raise RuntimeError(
+                "LocalGPU4BitBackend requires a CUDA-capable GPU, "
+                f"but torch.cuda.is_available() returned {torch.cuda.is_available()}"
+            )
+
+        logger.info(
+            "LocalGPU4BitBackend: model=%s quantize=%s device=%s",
+            model_id,
+            quantize,
+            self._device,
+        )
+
+        self._load_model()
+
+    @staticmethod
+    def is_available() -> bool:
+        """Check whether local GPU inference can be used.
+
+        Returns
+        -------
+        bool
+            ``True`` if ``torch`` and ``transformers`` are importable and a
+            CUDA-capable GPU is detected.
+        """
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            return False
+        return torch.cuda.is_available()
+
+    def _load_model(self) -> None:
+        """Load tokenizer and model with the configured quantization settings.
+
+        The model is loaded onto the GPU. Quantization is configured via
+        ``BitsAndBytesConfig`` for 4/8-bit or via ``torch_dtype`` for fp16/bf16.
+
+        Raises
+        ------
+        ImportError
+            If ``transformers`` is not installed.
+        RuntimeError
+            If the model fails to load.
+        """
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+        logger.info("Loading tokenizer for %s ...", self._model_id)
+        tokenizer = AutoTokenizer.from_pretrained(self._model_id)
+        if tokenizer.pad_token is None:  # type: ignore
+            tokenizer.pad_token = tokenizer.eos_token  # type: ignore
+
+        quantization_config = None
+        torch_dtype: torch.dtype | str = torch.float16
+
+        if self._quantize == "4bit":
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.bfloat16,
+            )
+            torch_dtype = "auto"
+        elif self._quantize == "8bit":
+            quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+            torch_dtype = "auto"
+        elif self._quantize in ("bf16", "bfloat16"):
+            torch_dtype = torch.bfloat16
+
+        logger.info(
+            "Loading model %s with quantize=%s ...",
+            self._model_id,
+            self._quantize,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            self._model_id,
+            quantization_config=quantization_config,
+            torch_dtype=torch_dtype,
+            device_map="auto",
+        )
+        logger.info("Model loaded successfully on %s", self._device)
+
+        self._tokenizer = tokenizer
+        self._model = model
+
+    def generate(self, prompt: str) -> str:
+        """Run inference on the local GPU and return generated text.
+
+        Parameters
+        ----------
+        prompt : str
+            The prompt to send.
+
+        Returns
+        -------
+        str
+            Raw model output.
+
+        Raises
+        ------
+        RuntimeError
+            If the model has not been loaded or generation fails.
+        """
+        if self._model is None or self._tokenizer is None:
+            raise RuntimeError("Model not loaded. Call _load_model() first.")
+
+        import torch
+
+        inputs = self._tokenizer(prompt, return_tensors="pt").to(self._device)
+
+        with torch.no_grad():
+            outputs = self._model.generate(  # type: ignore
+                **inputs,
+                max_new_tokens=LLM_MAX_TOKENS,
+                temperature=LLM_TEMPERATURE,
+                do_sample=True,
+                pad_token_id=self._tokenizer.pad_token_id,
+            )
+
+        generated = self._tokenizer.decode(outputs[0], skip_special_tokens=True)
+        prompt_len = len(self._tokenizer.decode(inputs["input_ids"][0], skip_special_tokens=True))
+        if isinstance(generated, str):
+            response = generated[prompt_len:].strip()
+        else:
+            response = str(generated)[prompt_len:].strip()
+
+        return response
+
+
+class AutoBackend(LLMBackend):
+    """Smart backend that tries a configurable sequence of inference backends.
+
+    On each ``generate`` call the wrapper iterates through the ordered
+    fallback list, returning the first successful response. The default
+    order is **Modal → local GPU → mock**, configurable via the
+    ``AUTO_FALLBACK_ORDER`` environment variable or ``config.yaml``.
+
+    Recognised backend names in the fallback order:
+
+    * ``"modal"`` — ``ModalBackend`` (requires ``MODAL_API_URL`` env var)
+    * ``"local"`` — ``LocalGPU4BitBackend`` (requires CUDA + torch/transformers)
+    * ``"mock"`` — ``MockBackend`` (always available)
+
+    Parameters
+    ----------
+    model_id : str
+        Model identifier used by both Modal and local backends.
+    quantize : str
+        Quantization mode for local GPU. Default is ``"fp16"``.
+    fallback_order : list[str]
+        Ordered list of backend names to try. Default is
+        ``["modal", "local", "mock"]``.
+    """
+
+    # Map backend name → (class_or_none, availability_check)
+    _BACKEND_REGISTRY: dict[str, Any] = {
+        "modal": (ModalBackend, lambda: bool(os.environ.get("MODAL_API_URL"))),
+        "local": (LocalGPU4BitBackend, LocalGPU4BitBackend.is_available),
+        "mock": (MockBackend, lambda: True),
+    }
+
+    def __init__(
+        self,
+        model_id: str,
+        quantize: str = LOCAL_QUANTIZE,
+        fallback_order: list[str] | None = None,
+    ) -> None:
+        if fallback_order is None:
+            fallback_order = ["modal", "local", "mock"]
+
+        self._backends: list[LLMBackend] = []
+
+        for name in fallback_order:
+            name = name.strip().lower()
+            if name not in self._BACKEND_REGISTRY:
+                logger.warning("AutoBackend: unknown backend '%s', skipping", name)
+                continue
+
+            backend_cls, availability_fn = self._BACKEND_REGISTRY[name]
+            try:
+                if not availability_fn():
+                    logger.info("AutoBackend: backend '%s' not available", name)
+                    continue
+            except Exception as exc:
+                logger.warning("AutoBackend: availability check for '%s' failed: %s", name, exc)
+                continue
+
+            try:
+                if name == "modal":
+                    backend = backend_cls(model_id)
+                elif name == "local":
+                    backend = backend_cls(model_id, quantize=quantize)
+                elif name == "mock":
+                    backend = backend_cls()
+                else:
+                    backend = backend_cls(model_id)
+                self._backends.append(backend)
+                logger.info("AutoBackend: registered '%s'", name)
+            except Exception as exc:
+                logger.warning("AutoBackend: failed to init '%s': %s", name, exc)
+
+        if not self._backends:
+            logger.warning("AutoBackend: no backends available, forcing mock")
+            self._backends = [MockBackend()]
+
+        logger.info(
+            "AutoBackend: fallback chain = %s",
+            [type(b).__name__ for b in self._backends],
+        )
+
+    def generate(self, prompt: str) -> str:
+        """Try each backend in fallback order, return first successful response.
+
+        Parameters
+        ----------
+        prompt : str
+            The prompt to send.
+
+        Returns
+        -------
+        str
+            Raw model output.
+        """
+        for i, backend in enumerate(self._backends):
+            try:
+                return backend.generate(prompt)
+            except Exception as exc:
+                logger.warning(
+                    "AutoBackend: backend %d/%d (%s) failed: %s",
+                    i + 1,
+                    len(self._backends),
+                    type(backend).__name__,
+                    exc,
+                )
+
+        # Should be unreachable (mock always succeeds)
+        logger.error("AutoBackend: all %d backends exhausted", len(self._backends))
+        raise RuntimeError("All backends exhausted")
 
 
 # ---------------------------------------------------------------------------
